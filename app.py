@@ -11,8 +11,10 @@ Usage:
 """
 
 import asyncio
+import atexit
 import os
 import re
+import signal
 import sys
 from pathlib import Path
 
@@ -43,6 +45,72 @@ DEFAULT_CWD: Path = Path(os.environ.get("DEFAULT_CWD", ".")).resolve()
 
 # How often to clean up idle sessions (seconds)
 CLEANUP_INTERVAL = 300  # 5 minutes
+
+# PID file to prevent zombie instances
+PID_FILE = Path(__file__).parent / ".hydra-agent.pid"
+
+
+# =============================================================================
+# Zombie prevention
+# =============================================================================
+
+def _kill_existing_instance() -> None:
+    """Kill any existing bot instance using the PID file."""
+    if not PID_FILE.exists():
+        return
+
+    try:
+        old_pid = int(PID_FILE.read_text().strip())
+    except (ValueError, OSError):
+        PID_FILE.unlink(missing_ok=True)
+        return
+
+    if old_pid == os.getpid():
+        return
+
+    # Check if the old process is still running
+    try:
+        os.kill(old_pid, 0)  # Signal 0 = just check if alive
+    except ProcessLookupError:
+        # Process is dead, clean up stale PID file
+        PID_FILE.unlink(missing_ok=True)
+        return
+    except PermissionError:
+        # Process exists but we can't signal it — leave it
+        print(f"Warning: existing instance (PID {old_pid}) is running but we can't stop it")
+        return
+
+    # Kill the old instance
+    print(f"Stopping existing instance (PID {old_pid})...")
+    try:
+        os.kill(old_pid, signal.SIGTERM)
+        # Give it a moment to clean up
+        import time
+        for _ in range(10):
+            time.sleep(0.2)
+            try:
+                os.kill(old_pid, 0)
+            except ProcessLookupError:
+                break
+        else:
+            # Still alive, force kill
+            os.kill(old_pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except Exception as e:
+        print(f"Warning: could not stop old instance: {e}")
+
+    PID_FILE.unlink(missing_ok=True)
+
+
+def _write_pid_file() -> None:
+    """Write current PID to the PID file."""
+    PID_FILE.write_text(str(os.getpid()))
+
+
+def _cleanup_pid_file() -> None:
+    """Remove the PID file on exit."""
+    PID_FILE.unlink(missing_ok=True)
 
 
 # =============================================================================
@@ -83,7 +151,7 @@ def strip_mention(text: str) -> str:
 # =============================================================================
 
 @app.event("app_mention")
-async def handle_app_mention(event: dict, say) -> None:
+async def handle_app_mention(event: dict, say, client) -> None:
     """
     Handle @mentions of the bot.
 
@@ -104,20 +172,15 @@ async def handle_app_mention(event: dict, say) -> None:
     print(f"\n[@mention] channel={channel} thread={thread_ts}")
     print(f"  Text: {text[:100]}")
 
-    await sessions.process_message(channel, thread_ts, text, say)
+    await sessions.process_message(channel, thread_ts, text, say, slack_client=client)
 
 
 @app.event("message")
-async def handle_message(event: dict, say) -> None:
+async def handle_message(event: dict, say, client) -> None:
+    Handle messages in threads where the bot has an active session.
     """
-    Handle all message events — routes thread replies to active sessions.
-    """
-    print(f"\n[MESSAGE HANDLER] subtype={event.get('subtype')} bot_id={event.get('bot_id')} thread_ts={event.get('thread_ts')}")
-
-    # Ignore bot messages
-    if event.get("bot_id"):
-        return
-    if event.get("subtype"):
+    # Ignore bot messages and subtypes (edits, deletes, etc.)
+    if event.get("bot_id") or event.get("subtype"):
         return
 
     # Only handle thread replies
@@ -127,14 +190,13 @@ async def handle_message(event: dict, say) -> None:
 
     channel = event.get("channel", "")
 
-    # Skip if this is an @mention (handled by handle_app_mention)
-    text_raw = event.get("text", "")
-    if re.search(r"<@[A-Z0-9]+>", text_raw):
-        return
-
     # Only respond if we have an active session for this thread
     if not sessions.has_session(channel, thread_ts):
-        print(f"  No session for {channel}:{thread_ts}")
+        return
+
+    # Skip @mentions (handled by handle_app_mention)
+    text_raw = event.get("text", "")
+    if re.search(r"<@[A-Z0-9]+>", text_raw):
         return
 
     text = text_raw.strip()
@@ -144,7 +206,7 @@ async def handle_message(event: dict, say) -> None:
     print(f"\n[Thread reply] channel={channel} thread={thread_ts}")
     print(f"  Text: {text[:100]}")
 
-    await sessions.process_message(channel, thread_ts, text, say)
+    await sessions.process_message(channel, thread_ts, text, say, slack_client=client)
 
 
 # =============================================================================
@@ -214,6 +276,11 @@ async def main() -> None:
 if __name__ == "__main__":
     if not validate_env():
         sys.exit(1)
+
+    # Kill any existing instance before starting
+    _kill_existing_instance()
+    _write_pid_file()
+    atexit.register(_cleanup_pid_file)
 
     try:
         asyncio.run(main())
