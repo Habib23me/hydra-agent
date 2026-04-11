@@ -47,9 +47,16 @@ ALLOWED_COMMANDS: set[str] = {
     # Directory navigation
     "pwd",
     "cd",
-    # Text output
+    # Text processing
     "echo",
     "printf",
+    "sort",
+    "uniq",
+    "cut",
+    "tr",
+    "tee",
+    "xargs",
+    "diff",
     # HTTP/Network (for testing endpoints)
     "curl",
     # Environment inspection
