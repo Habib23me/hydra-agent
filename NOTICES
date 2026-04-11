@@ -1,0 +1,11 @@
+Third-Party Notices
+===================
+
+This project includes modified code from "claude-engineer" by Cole Medin,
+originally licensed under the MIT License:
+
+  - security.py: Bash command allowlist and validation hooks
+
+Original source: https://github.com/coleam00/claude-code-flow
+Copyright (c) 2025 Cole Medin
+License: MIT (see https://opensource.org/licenses/MIT)
