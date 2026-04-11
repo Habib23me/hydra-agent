@@ -236,7 +236,7 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
                     ),
                 ],
             },
-            max_turns=1000,
+            max_turns=200,
             cwd=str(cwd.resolve()),
             settings=str(settings_file.resolve()),
         )

@@ -260,6 +260,7 @@ The bot will reply in a thread. Reply in that thread to continue the conversatio
 | `LINEAR_API_KEY` | No | Linear API key for issue tracking |
 | `DEFAULT_CWD` | No | Default working directory (default: current dir) |
 | `MEMORY_DIR` | No | Agent memory storage path (default: `~/.hydra-memory`) |
+| `MAX_SESSION_COST_USD` | No | Max spend per Slack thread before auto-stopping (default: `1.0`) |
 
 ## Project Structure
 

@@ -12,6 +12,7 @@ Features:
 """
 
 import asyncio
+import os
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -35,6 +36,12 @@ IDLE_TIMEOUT_SECONDS = 1800
 # Max retries when the SDK client fails
 MAX_RECONNECT_RETRIES = 2
 
+# Cost guard: max USD spend per session before auto-stopping
+MAX_SESSION_COST_USD = float(os.environ.get("MAX_SESSION_COST_USD", "1.0"))
+
+# Max consecutive errors before circuit-breaking
+MAX_CONSECUTIVE_ERRORS = 5
+
 
 @dataclass
 class ThreadSession:
@@ -56,6 +63,8 @@ class ThreadSession:
     _stream_msg_ts: str | None = None
     # Track consecutive errors for circuit-breaking
     _consecutive_errors: int = 0
+    # Cost tracking
+    total_cost_usd: float = 0.0
 
 
 class SessionManager:
@@ -99,6 +108,22 @@ class SessionManager:
             )
 
         session = self._sessions[key]
+
+        # Budget guard: stop if session has spent too much
+        if session.total_cost_usd >= MAX_SESSION_COST_USD:
+            await say(
+                text=f":warning: Session budget reached (${session.total_cost_usd:.2f} / ${MAX_SESSION_COST_USD:.2f}). Start a new thread to continue.",
+                thread_ts=thread_ts,
+            )
+            return
+
+        # Circuit breaker: stop if too many consecutive errors
+        if session._consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+            await say(
+                text=f":warning: Too many errors in a row ({session._consecutive_errors}). Start a new thread to reset.",
+                thread_ts=thread_ts,
+            )
+            return
 
         # Serialize access to this session (one message at a time)
         async with session._lock:
@@ -193,7 +218,8 @@ class SessionManager:
                     )
 
                     if result.cost_usd is not None:
-                        print(f"  [Session {key}] Turn cost: ${result.cost_usd:.4f}")
+                        session.total_cost_usd += result.cost_usd
+                        print(f"  [Session {key}] Turn: ${result.cost_usd:.4f} | Total: ${session.total_cost_usd:.4f} / ${MAX_SESSION_COST_USD:.2f}")
                 else:
                     no_resp = "(No response generated)"
                     if thinking_ts and slack_client:
