@@ -1,0 +1,10 @@
+{
+  "projects": [
+    {
+      "name": "my-app",
+      "path": "/home/user/projects/my-app",
+      "aliases": ["myapp", "my app"],
+      "description": "My App -- short description of the project"
+    }
+  ]
+}

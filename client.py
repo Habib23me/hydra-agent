@@ -69,9 +69,69 @@ GITHUB_TOKEN: str = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 LINEAR_API_KEY: str = os.environ.get("LINEAR_API_KEY", "")
 
 
+def load_projects_registry() -> str:
+    """Load the project registry and format it for the system prompt."""
+    projects_file = Path(__file__).parent / "projects.json"
+    if not projects_file.exists():
+        return ""
+
+    data = json.loads(projects_file.read_text())
+    projects = data.get("projects", [])
+    if not projects:
+        return ""
+
+    lines = ["\n## Known Projects\n"]
+    lines.append("When the user references a project, use these paths directly. Do not search for them.\n")
+    for p in projects:
+        aliases = ", ".join(p.get("aliases", []))
+        alias_str = f" (also: {aliases})" if aliases else ""
+        lines.append(f"- **{p['name']}**{alias_str}: `{p['path']}`")
+        if p.get("description"):
+            lines.append(f"  {p['description']}")
+    return "\n".join(lines)
+
+
+AGENT_DIR = Path(__file__).parent.resolve()
+MEMORY_DIR = Path(os.environ.get("MEMORY_DIR", Path.home() / ".hydra-memory"))
+MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def load_project_memory(project_name: str) -> str:
+    """Load memory file for a specific project."""
+    memory_file = MEMORY_DIR / f"{project_name}.md"
+    if memory_file.exists():
+        return memory_file.read_text()
+    return ""
+
+
+def load_all_project_memories() -> str:
+    """Load all project memory files and format for the system prompt."""
+    if not MEMORY_DIR.exists():
+        return ""
+
+    memories = []
+    for f in sorted(MEMORY_DIR.glob("*.md")):
+        content = f.read_text().strip()
+        if content:
+            memories.append(content)
+
+    if not memories:
+        return ""
+
+    return "\n\n## Project Memory\n\nYou have accumulated knowledge about projects you've worked on. Use this to avoid re-exploring things you already know.\n\n" + "\n\n---\n\n".join(memories)
+
+
 def load_system_prompt() -> str:
-    """Load the conversational agent system prompt."""
-    return (PROMPTS_DIR / "system_prompt.md").read_text()
+    """Load the conversational agent system prompt with project registry and memory."""
+    base = (PROMPTS_DIR / "system_prompt.md").read_text()
+
+    # Inject runtime paths into placeholders
+    base = base.replace("{{MEMORY_DIR}}", str(MEMORY_DIR.resolve()))
+    base = base.replace("{{AGENT_DIR}}", str(AGENT_DIR))
+
+    projects = load_projects_registry()
+    memory = load_all_project_memories()
+    return base + projects + memory
 
 
 def create_security_settings() -> SecuritySettings:
@@ -86,6 +146,9 @@ def create_security_settings() -> SecuritySettings:
                 "Edit(./**)",
                 "Glob(./**)",
                 "Grep(./**)",
+                f"Read({MEMORY_DIR.resolve()}/**)",
+                f"Write({MEMORY_DIR.resolve()}/**)",
+                f"Edit({MEMORY_DIR.resolve()}/**)",
                 "Bash(*)",
                 *PLAYWRIGHT_TOOLS,
                 "mcp__github__*",

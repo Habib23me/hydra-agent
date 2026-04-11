@@ -137,11 +137,78 @@ LINEAR_API_KEY=lin_api_your_key
 DEFAULT_CWD=/path/to/your/project
 ```
 
-### 7. Run the Bot
+### 7. Register Your Projects
+
+The bot needs to know where your projects live so it doesn't waste time searching for them. Copy the example and edit:
 
 ```bash
-source venv/bin/activate
-python app.py
+cp projects.example.json projects.json
+```
+
+```json
+{
+  "projects": [
+    {
+      "name": "my-app",
+      "path": "/absolute/path/to/my-app",
+      "aliases": ["myapp", "my app"],
+      "description": "Short description of the project"
+    }
+  ]
+}
+```
+
+Each entry maps a project name (and common aliases) to its absolute path. When you say "work on my-app" in Slack, the agent switches to that directory immediately instead of searching the filesystem.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Canonical project name |
+| `path` | Yes | Absolute path to the project root |
+| `aliases` | No | Alternative names the user might say in Slack |
+| `description` | No | Short context about the project (injected into the agent's prompt) |
+
+### 8. Run the Bot
+
+The bot is managed with [PM2](https://pm2.keymetrics.io/) for daemonization, auto-restart, and log management.
+
+```bash
+# Install PM2 (if not already installed)
+npm install -g pm2
+
+# Start the bot
+pm2 start ecosystem.config.cjs
+
+# Check status
+pm2 status
+
+# View logs
+pm2 logs hydra-agent
+
+# Restart after code changes
+pm2 restart hydra-agent
+
+# Stop the bot
+pm2 stop hydra-agent
+```
+
+Logs are written to `./logs/` with timestamps. PM2 auto-restarts the bot on crash (up to 10 times with 3s backoff).
+
+#### Survive reboots
+
+```bash
+# Generate the startup script (requires sudo)
+pm2 startup
+
+# Run the command it outputs, then save the process list
+pm2 save
+```
+
+This installs a launchd service (macOS) or systemd unit (Linux) that resurrects your PM2 processes on reboot. Run `pm2 save` again any time you change your process list.
+
+#### Verify it's running
+
+```bash
+pm2 logs hydra-agent --lines 20 --nostream
 ```
 
 You should see:
@@ -157,11 +224,9 @@ Linear MCP: enabled
 
 @mention the bot in any channel to start a conversation.
 Reply in the thread to continue the conversation.
-
-Press Ctrl+C to stop.
 ```
 
-### 8. Test It
+### 9. Test It
 
 In Slack, @mention the bot:
 
@@ -180,21 +245,29 @@ The bot will reply in a thread. Reply in that thread to continue the conversatio
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | No | GitHub PAT for repo access, PRs, issues |
 | `LINEAR_API_KEY` | No | Linear API key for issue tracking |
 | `DEFAULT_CWD` | No | Default working directory (default: current dir) |
+| `MEMORY_DIR` | No | Agent memory storage path (default: `~/.hydra-memory`) |
 
 ## Project Structure
 
 ```
 hydra-agent/
-├── app.py                # Main entry point — Slack bot with thread routing
-├── session_manager.py    # Per-thread Claude SDK session lifecycle
-├── agent.py              # Single-turn runner (send message, collect response)
-├── client.py             # Claude SDK client config with MCP servers
-├── security.py           # Bash command allowlist and validation
+├── app.py                  # Main entry point — Slack bot with thread routing
+├── session_manager.py      # Per-thread Claude SDK session lifecycle
+├── agent.py                # Single-turn runner (send message, collect response)
+├── client.py               # Claude SDK client config with MCP servers
+├── worktree.py             # Git worktree management for isolated coding
+├── security.py             # Bash command allowlist and validation
+├── projects.example.json     # Project registry template (copy to projects.json)
+├── ecosystem.config.cjs      # PM2 process management config
 ├── prompts/
-│   └── system_prompt.md  # Agent personality and instructions
+│   └── system_prompt.md    # Agent personality and instructions
+├── logs/                     # PM2 log output (gitignored)
 ├── requirements.txt
 ├── LICENSE
-└── NOTICES               # Third-party attribution
+└── LICENSE
+
+~/.hydra-memory/              # Agent memory (outside repo, auto-created)
+└── {project-name}.md         # One file per project, built by the agent
 ```
 
 ## Security
@@ -206,6 +279,8 @@ The agent runs with defense-in-depth security:
 3. **Bash Allowlist** — Only specific commands permitted (`git`, `npm`, `node`, `python`, `gh`, etc.)
 4. **Dangerous Command Validation** — Commands like `rm` are validated to prevent system directory deletion
 5. **MCP Permissions** — Tools explicitly allowed in security settings
+
+6. **Self-protection** — The agent cannot modify its own source code directory
 
 See `security.py` for the full command allowlist.
 
@@ -234,4 +309,3 @@ See `security.py` for the full command allowlist.
 
 MIT License — see [LICENSE](LICENSE) for details.
 
-Third-party notices in [NOTICES](NOTICES).

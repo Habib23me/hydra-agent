@@ -9,6 +9,7 @@ Uses an allowlist approach - only explicitly permitted commands can run.
 import os
 import re
 import shlex
+from pathlib import Path
 from typing import Any, NamedTuple
 
 from claude_agent_sdk import PreToolUseHookInput
@@ -444,6 +445,15 @@ def get_command_for_validation(cmd: str, segments: list[str]) -> str:
     return ""
 
 
+# Resolved path to the agent's own directory — writes here are blocked.
+_AGENT_DIR: str = str(Path(__file__).parent.resolve())
+
+
+def _references_agent_dir(command: str) -> bool:
+    """Check if a command references the agent's own installation directory."""
+    return _AGENT_DIR in command
+
+
 async def bash_security_hook(
     input_data: PreToolUseHookInput,
     tool_use_id: str | None = None,
@@ -453,6 +463,7 @@ async def bash_security_hook(
     Pre-tool-use hook that validates bash commands using an allowlist.
 
     Only commands in ALLOWED_COMMANDS are permitted.
+    Commands that would modify the agent's own directory are blocked.
 
     Args:
         input_data: Dict containing tool_name and tool_input
@@ -468,6 +479,15 @@ async def bash_security_hook(
     command: str = input_data.get("tool_input", {}).get("command", "")
     if not command:
         return {}
+
+    # Block destructive commands that target the agent's own directory
+    destructive_cmds = {"rm", "mv", "cp", "git"}
+    cmds = extract_commands(command)
+    if any(c in destructive_cmds for c in cmds) and _references_agent_dir(command):
+        return SyncHookJSONOutput(
+            decision="block",
+            reason="Commands that modify the agent's own installation directory are not allowed",
+        )
 
     # Extract all commands from the command string
     commands: list[str] = extract_commands(command)

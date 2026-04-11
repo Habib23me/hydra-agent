@@ -159,16 +159,26 @@ class SessionManager:
 
                     if thinking_ts and slack_client:
                         # Update the thinking message with the final text
-                        if len(text) <= 3900:
-                            await slack_client.chat_update(
-                                channel=channel, ts=thinking_ts, text=text,
-                            )
+                        if len(text.encode("utf-8")) <= 3800:
+                            try:
+                                await slack_client.chat_update(
+                                    channel=channel, ts=thinking_ts, text=text,
+                                )
+                            except Exception:
+                                # Fallback: delete thinking msg and post as new
+                                await slack_client.chat_delete(
+                                    channel=channel, ts=thinking_ts,
+                                )
+                                await say(text=text, thread_ts=thread_ts)
                         else:
                             # Delete thinking msg and post chunks
-                            await slack_client.chat_delete(
-                                channel=channel, ts=thinking_ts,
-                            )
-                            for chunk in self._split_text(text, 3900):
+                            try:
+                                await slack_client.chat_delete(
+                                    channel=channel, ts=thinking_ts,
+                                )
+                            except Exception:
+                                pass
+                            for chunk in self._split_text(text, 3800):
                                 await say(text=chunk, thread_ts=thread_ts)
                     else:
                         # Fallback: no slack_client, use say()
