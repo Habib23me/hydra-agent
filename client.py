@@ -41,14 +41,7 @@ class SecuritySettings(TypedDict):
 
 # Playwright MCP tools for browser automation
 PLAYWRIGHT_TOOLS: list[str] = [
-    "mcp__playwright__browser_navigate",
-    "mcp__playwright__browser_take_screenshot",
-    "mcp__playwright__browser_click",
-    "mcp__playwright__browser_type",
-    "mcp__playwright__browser_select_option",
-    "mcp__playwright__browser_hover",
-    "mcp__playwright__browser_snapshot",
-    "mcp__playwright__browser_wait_for",
+    "mcp__playwright__*",
 ]
 
 # Built-in tools
