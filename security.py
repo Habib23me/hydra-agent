@@ -58,6 +58,23 @@ ALLOWED_COMMANDS: set[str] = {
     "tee",
     "xargs",
     "diff",
+    "jq",
+    "sed",
+    "awk",
+    "yes",
+    "true",
+    "false",
+    "test",
+    "basename",
+    "dirname",
+    "realpath",
+    "readlink",
+    "stat",
+    "file",
+    "date",
+    "whoami",
+    "hostname",
+    "uname",
     # HTTP/Network (for testing endpoints)
     "curl",
     # Environment inspection
@@ -70,6 +87,9 @@ ALLOWED_COMMANDS: set[str] = {
     "npm",
     "npx",
     "node",
+    # Mobile development
+    "flutter",
+    "dart",
     # Version control
     "git",
     # GitHub CLI
@@ -78,6 +98,7 @@ ALLOWED_COMMANDS: set[str] = {
     "ps",
     "lsof",
     "sleep",
+    "timeout",
     "pkill",  # For killing dev servers; validated separately
     # Script execution
     "init.sh",  # Init scripts; validated separately
