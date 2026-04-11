@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""
+Slack Bot — Conversational AI Developer Teammate
+=================================================
+
+Listens for @mentions via Socket Mode and manages thread-based conversations.
+Each Slack thread gets its own Claude SDK session with preserved context.
+
+Usage:
+    python app.py
+"""
+
+import asyncio
+import os
+import re
+import sys
+from pathlib import Path
+
+import certifi
+from dotenv import load_dotenv
+
+# Fix SSL certificate verification on macOS with Homebrew Python.
+if not os.environ.get("SSL_CERT_FILE"):
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+
+load_dotenv()
+
+from slack_bolt.async_app import AsyncApp
+from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+
+from session_manager import SessionManager
+
+
+# =============================================================================
+# Environment
+# =============================================================================
+
+SLACK_BOT_TOKEN: str = os.environ.get("SLACK_BOT_TOKEN", "")
+SLACK_APP_TOKEN: str = os.environ.get("SLACK_APP_TOKEN", "")
+
+# Default working directory for the agent. Can be overridden per-session later.
+DEFAULT_CWD: Path = Path(os.environ.get("DEFAULT_CWD", ".")).resolve()
+
+# How often to clean up idle sessions (seconds)
+CLEANUP_INTERVAL = 300  # 5 minutes
+
+
+# =============================================================================
+# App setup
+# =============================================================================
+
+app = AsyncApp(token=SLACK_BOT_TOKEN)
+sessions = SessionManager(default_cwd=DEFAULT_CWD)
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+def strip_mention(text: str) -> str:
+    """Remove Slack user mentions (e.g. <@U12345>) from the text."""
+    return re.sub(r"<@[A-Z0-9]+>", "", text).strip()
+
+
+# =============================================================================
+# Event handlers
+# =============================================================================
+
+@app.event("app_mention")
+async def handle_app_mention(event: dict, say) -> None:
+    """
+    Handle @mentions of the bot.
+
+    If this is a top-level message (no thread_ts), create a new thread.
+    If this is inside an existing thread, route to that thread's session.
+    """
+    if event.get("bot_id"):
+        return
+
+    text = strip_mention(event.get("text", ""))
+    if not text:
+        return
+
+    # Use thread_ts if already in a thread, otherwise start a new thread from this message
+    thread_ts = event.get("thread_ts") or event.get("ts")
+    channel = event.get("channel", "")
+
+    print(f"\n[@mention] channel={channel} thread={thread_ts}")
+    print(f"  Text: {text[:100]}")
+
+    await sessions.process_message(channel, thread_ts, text, say)
+
+
+@app.event("message")
+async def handle_message(event: dict, say) -> None:
+    """
+    Handle messages in threads where the bot has an active session.
+
+    Only responds to thread replies in active conversation threads.
+    Ignores bot messages, non-thread messages, and threads without sessions.
+    """
+    # Ignore bot messages
+    if event.get("subtype") == "bot_message" or event.get("bot_id"):
+        return
+    if "subtype" in event:
+        return
+
+    # Only handle thread replies
+    thread_ts = event.get("thread_ts")
+    if not thread_ts:
+        return
+
+    channel = event.get("channel", "")
+
+    # Only respond if we have an active session for this thread
+    if not sessions.has_session(channel, thread_ts):
+        return
+
+    text = strip_mention(event.get("text", "")).strip()
+    if not text:
+        return
+
+    print(f"\n[Thread reply] channel={channel} thread={thread_ts}")
+    print(f"  Text: {text[:100]}")
+
+    await sessions.process_message(channel, thread_ts, text, say)
+
+
+# =============================================================================
+# Startup
+# =============================================================================
+
+def validate_env() -> bool:
+    """Validate required environment variables."""
+    errors: list[str] = []
+
+    if not SLACK_BOT_TOKEN:
+        errors.append("SLACK_BOT_TOKEN is not set")
+    elif not SLACK_BOT_TOKEN.startswith("xoxb-"):
+        errors.append("SLACK_BOT_TOKEN should start with 'xoxb-'")
+
+    if not SLACK_APP_TOKEN:
+        errors.append("SLACK_APP_TOKEN is not set")
+    elif not SLACK_APP_TOKEN.startswith("xapp-"):
+        errors.append("SLACK_APP_TOKEN should start with 'xapp-'")
+
+    if errors:
+        print("Missing or invalid environment variables:\n")
+        for err in errors:
+            print(f"  - {err}")
+        return False
+
+    # Warnings for optional integrations
+    if not os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"):
+        print("Warning: GITHUB_PERSONAL_ACCESS_TOKEN not set — GitHub MCP disabled")
+    if not os.environ.get("LINEAR_API_KEY"):
+        print("Warning: LINEAR_API_KEY not set — Linear MCP disabled")
+
+    return True
+
+
+async def cleanup_loop() -> None:
+    """Periodically clean up idle sessions."""
+    while True:
+        await asyncio.sleep(CLEANUP_INTERVAL)
+        try:
+            await sessions.cleanup_idle()
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+
+
+async def main() -> None:
+    """Start the Slack Socket Mode listener."""
+    print("\n" + "=" * 60)
+    print("  AI Developer Teammate — Slack Bot")
+    print("=" * 60)
+    print(f"\nDefault working dir: {DEFAULT_CWD}")
+    print(f"GitHub MCP: {'enabled' if os.environ.get('GITHUB_PERSONAL_ACCESS_TOKEN') else 'disabled'}")
+    print(f"Linear MCP: {'enabled' if os.environ.get('LINEAR_API_KEY') else 'disabled'}")
+    print()
+    print("@mention the bot in any channel to start a conversation.")
+    print("Reply in the thread to continue the conversation.")
+    print()
+    print("Press Ctrl+C to stop.\n")
+
+    # Start idle session cleanup task
+    asyncio.create_task(cleanup_loop())
+
+    handler = AsyncSocketModeHandler(app, SLACK_APP_TOKEN)
+    await handler.start_async()
+
+
+if __name__ == "__main__":
+    if not validate_env():
+        sys.exit(1)
+
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n\nStopped by user.")
+        sys.exit(0)
