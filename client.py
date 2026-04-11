@@ -172,7 +172,7 @@ def get_mcp_servers() -> dict[str, McpServerConfig]:
     servers: dict[str, McpServerConfig] = {
         "playwright": cast(
             McpServerConfig,
-            {"command": "npx", "args": ["-y", "@playwright/mcp@latest"]},
+            {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--browser", "chromium"]},
         ),
     }
 
