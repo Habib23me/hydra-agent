@@ -20,6 +20,13 @@ Long responses can exceed Slack's message limit (~4000 bytes). The streaming cal
 
 **Fix**: Currently handled with try/except fallback to chunked posting. Could be more robust with consistent byte-length checking everywhere.
 
+## No dynamic model routing
+The plan was to swap models based on task type: Haiku for quick chat, Opus for planning/architecture, Sonnet for coding. Currently all sessions use Sonnet for everything. This means simple questions ("what's the status?") cost more than they should, and complex planning tasks don't get Opus-level reasoning.
+
+The SDK supports `client.set_model()` mid-session, so the infrastructure is there. What's missing is the routing logic -- heuristics or classifier to detect task phase and switch models accordingly.
+
+**Fix**: Build `model_router.py` with keyword/intent-based routing. Call `client.set_model()` before each `client.query()`. Phases: chat -> Haiku, plan/design -> Opus, code/implement -> Sonnet.
+
 ## Session loss on restart
 PM2 restart kills the Python process, which drops all in-memory sessions. Active Slack threads lose their conversation context. The agent reconnects on the next message via history replay, but the first message after restart may lack context.
 

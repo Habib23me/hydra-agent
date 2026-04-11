@@ -27,8 +27,8 @@ from client import create_session_client
 from worktree import cleanup_worktree, create_worktree
 
 
-# Default model for new sessions (haiku for conversational chat)
-DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+# Default model for new sessions
+DEFAULT_MODEL = "claude-sonnet-4-6"
 
 # How long before an idle session is cleaned up (30 minutes)
 IDLE_TIMEOUT_SECONDS = 1800
