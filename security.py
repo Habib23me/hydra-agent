@@ -36,6 +36,7 @@ ALLOWED_COMMANDS: set[str] = {
     "wc",
     "grep",
     "find",
+    "tree",
     # File operations (agent uses SDK tools for most file ops, but these are needed occasionally)
     "cp",
     "mv",
