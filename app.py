@@ -54,6 +54,22 @@ sessions = SessionManager(default_cwd=DEFAULT_CWD)
 
 
 # =============================================================================
+# Global middleware — log every incoming event for debugging
+# =============================================================================
+
+@app.middleware
+async def log_all_events(body, next):
+    """Log every event the app receives (before handler dispatch)."""
+    event = body.get("event", {})
+    etype = event.get("type", "?")
+    subtype = event.get("subtype", "none")
+    thread_ts = event.get("thread_ts", "none")
+    text = (event.get("text") or "")[:60]
+    print(f"\n[MIDDLEWARE] type={etype} subtype={subtype} thread_ts={thread_ts} text={text}")
+    await next()
+
+
+# =============================================================================
 # Helpers
 # =============================================================================
 
@@ -94,15 +110,14 @@ async def handle_app_mention(event: dict, say) -> None:
 @app.event("message")
 async def handle_message(event: dict, say) -> None:
     """
-    Handle messages in threads where the bot has an active session.
-
-    Only responds to thread replies in active conversation threads.
-    Ignores bot messages, non-thread messages, and threads without sessions.
+    Handle all message events — routes thread replies to active sessions.
     """
+    print(f"\n[MESSAGE HANDLER] subtype={event.get('subtype')} bot_id={event.get('bot_id')} thread_ts={event.get('thread_ts')}")
+
     # Ignore bot messages
-    if event.get("subtype") == "bot_message" or event.get("bot_id"):
+    if event.get("bot_id"):
         return
-    if "subtype" in event:
+    if event.get("subtype"):
         return
 
     # Only handle thread replies
@@ -112,11 +127,17 @@ async def handle_message(event: dict, say) -> None:
 
     channel = event.get("channel", "")
 
-    # Only respond if we have an active session for this thread
-    if not sessions.has_session(channel, thread_ts):
+    # Skip if this is an @mention (handled by handle_app_mention)
+    text_raw = event.get("text", "")
+    if re.search(r"<@[A-Z0-9]+>", text_raw):
         return
 
-    text = strip_mention(event.get("text", "")).strip()
+    # Only respond if we have an active session for this thread
+    if not sessions.has_session(channel, thread_ts):
+        print(f"  No session for {channel}:{thread_ts}")
+        return
+
+    text = text_raw.strip()
     if not text:
         return
 
