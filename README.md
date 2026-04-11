@@ -58,7 +58,21 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Install Claude Code CLI
+### 2. Install Playwright Browsers
+
+The agent uses Playwright for browser automation and testing. Install the bundled browsers:
+
+```bash
+# Install Playwright's bundled Chromium (recommended)
+npx playwright install chromium
+
+# Or install all browsers
+npx playwright install
+```
+
+**Note**: The agent uses Playwright's bundled Chromium, not system Chrome. If you see errors like `Chromium distribution 'chrome' is not found`, run the install command above.
+
+### 3. Install Claude Code CLI
 
 ```bash
 npm install -g @anthropic-ai/claude-code
@@ -67,7 +81,7 @@ npm install -g @anthropic-ai/claude-code
 claude --version
 ```
 
-### 3. Create a Slack App
+### 4. Create a Slack App
 
 Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app:
 
@@ -101,20 +115,20 @@ Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app:
 - In Slack, go to the channel where you want the bot
 - Type `/invite @YourBotName`
 
-### 4. Set Up GitHub MCP (Optional)
+### 5. Set Up GitHub MCP (Optional)
 
 Create a **Personal Access Token** at [github.com/settings/tokens](https://github.com/settings/tokens):
 - Click **Generate new token (classic)**
 - Select scopes: `repo`, `read:org`
 - Copy the token
 
-### 5. Set Up Linear MCP (Optional)
+### 6. Set Up Linear MCP (Optional)
 
 Create an **API Key** in your Linear workspace:
 - Go to **Settings** -> **API** -> **Personal API keys**
 - Create a new key and copy it
 
-### 6. Configure Environment
+### 7. Configure Environment
 
 ```bash
 cp .env.example .env
@@ -137,7 +151,7 @@ LINEAR_API_KEY=lin_api_your_key
 DEFAULT_CWD=/path/to/your/project
 ```
 
-### 7. Register Your Projects
+### 8. Register Your Projects
 
 The bot needs to know where your projects live so it doesn't waste time searching for them. Copy the example and edit:
 
@@ -167,7 +181,7 @@ Each entry maps a project name (and common aliases) to its absolute path. When y
 | `aliases` | No | Alternative names the user might say in Slack |
 | `description` | No | Short context about the project (injected into the agent's prompt) |
 
-### 8. Run the Bot
+### 9. Run the Bot
 
 The bot is managed with [PM2](https://pm2.keymetrics.io/) for daemonization, auto-restart, and log management.
 
@@ -226,7 +240,7 @@ Linear MCP: enabled
 Reply in the thread to continue the conversation.
 ```
 
-### 9. Test It
+### 10. Test It
 
 In Slack, @mention the bot:
 
