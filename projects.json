@@ -1,0 +1,98 @@
+{
+  "projects": [
+    {
+      "name": "spend-log",
+      "path": "/Volumes/mac_mini/spend-log",
+      "aliases": ["spendlog", "spend log"],
+      "description": "Spend Log app -- Flutter mobile + Next.js web"
+    },
+    {
+      "name": "hydra-agent",
+      "path": "/Volumes/mac_mini/hydra-agent",
+      "aliases": ["hydra"],
+      "description": "Hydra Agent -- AI developer teammate Slack bot (read-only)"
+    },
+    {
+      "name": "gymlive-mobile",
+      "path": "/Volumes/mac_mini/gymlive/mobile",
+      "aliases": ["gymlive mobile", "gym mobile", "gymlive app"],
+      "description": "Gymlive mobile app (Flutter, has watch_sdk submodule)",
+      "base_branch": "main",
+      "linear_workspace": "gymlive",
+      "sentry_org": "gymlive",
+      "slack_channel": "C07SREFHUTV"
+    },
+    {
+      "name": "gymlive-backend",
+      "path": "/Volumes/mac_mini/gymlive/backend",
+      "aliases": ["gymlive backend", "gym backend", "gymlive api"],
+      "description": "Gymlive backend service",
+      "base_branch": "main",
+      "linear_workspace": "gymlive",
+      "sentry_org": "gymlive",
+      "slack_channel": "C07SREFHUTV"
+    },
+    {
+      "name": "gymlive-blog",
+      "path": "/Volumes/mac_mini/gymlive/strapi-cloud-template-blog-2ef4165a33",
+      "aliases": ["gymlive blog", "strapi blog"],
+      "description": "Gymlive Strapi blog template",
+      "base_branch": "main",
+      "linear_workspace": "gymlive",
+      "sentry_org": "gymlive",
+      "slack_channel": "C07SREFHUTV"
+    },
+    {
+      "name": "viaslim-mobile",
+      "path": "/Volumes/mac_mini/viaslim-ag/viaslim-mobile-app",
+      "aliases": ["viaslim mobile", "viaslim app"],
+      "description": "ViaSlim mobile app",
+      "base_branch": "main",
+      "linear_workspace": "viaslim",
+      "sentry_org": "viaslim",
+      "slack_channel": "C07V8G8LATB"
+    },
+    {
+      "name": "viaslim-backend",
+      "path": "/Volumes/mac_mini/viaslim-ag/viaslim-backend",
+      "aliases": ["viaslim backend", "viaslim api"],
+      "description": "ViaSlim backend service",
+      "base_branch": "dev/latest",
+      "linear_workspace": "viaslim",
+      "sentry_org": "viaslim",
+      "slack_channel": "C07V8G8LATB"
+    },
+    {
+      "name": "viaslim-onboarding",
+      "path": "/Volumes/mac_mini/viaslim-ag/viaslim-singlepage-onboarding",
+      "aliases": ["viaslim onboarding", "viaslim web", "viaslim landing"],
+      "description": "ViaSlim single-page onboarding site",
+      "base_branch": "main",
+      "linear_workspace": "viaslim",
+      "sentry_org": "viaslim",
+      "slack_channel": "C07V8G8LATB"
+    }
+  ],
+  "linear_workspaces": {
+    "gymlive": {
+      "api_key_env": "LINEAR_API_KEY",
+      "description": "Gymlive Linear workspace (teams: Gymlive/GYM, Design/DES)",
+      "bot_user_id": "83b55211-8359-45c6-9d35-4dd3b401908d"
+    },
+    "viaslim": {
+      "api_key_env": "LINEAR_API_KEY_VIASLIM",
+      "description": "ViaSlim Linear workspace",
+      "bot_user_id": "3cab7912-8c32-442e-af4c-12e5efdeb3ce"
+    }
+  },
+  "sentry_orgs": {
+    "gymlive": {
+      "auth_token_env": "SENTRY_AUTH_TOKEN_GYMLIVE",
+      "description": "Gymlive Sentry organization"
+    },
+    "viaslim": {
+      "auth_token_env": "SENTRY_AUTH_TOKEN_VIASLIM",
+      "description": "ViaSlim Sentry organization"
+    }
+  }
+}
