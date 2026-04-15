@@ -23,7 +23,7 @@ from slack_sdk.web.async_client import AsyncWebClient
 from claude_agent_sdk import ClaudeSDKClient
 
 from agent import TurnResult, run_turn
-from client import create_session_client
+from client import create_session_client, resolve_cwd_for_channel
 from worktree import cleanup_worktree, create_worktree
 
 
@@ -101,10 +101,12 @@ class SessionManager:
 
         # Get or create session
         if key not in self._sessions:
+            # Resolve CWD from channel → project mapping, fall back to default
+            session_cwd = resolve_cwd_for_channel(channel, self._default_cwd)
             self._sessions[key] = ThreadSession(
                 channel=channel,
                 thread_ts=thread_ts,
-                cwd=self._default_cwd,
+                cwd=session_cwd,
             )
 
         session = self._sessions[key]

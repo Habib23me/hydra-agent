@@ -17,7 +17,7 @@ load_dotenv()
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, McpServerConfig
 from claude_agent_sdk.types import HookCallback, HookMatcher
 
-from security import bash_security_hook
+from security import bash_security_hook, file_read_guard_hook
 
 
 # Valid permission modes for the Claude SDK
@@ -78,7 +78,9 @@ def load_projects_registry() -> str:
     for p in projects:
         aliases = ", ".join(p.get("aliases", []))
         alias_str = f" (also: {aliases})" if aliases else ""
-        lines.append(f"- **{p['name']}**{alias_str}: `{p['path']}`")
+        linear_ws = p.get("linear_workspace", "")
+        linear_str = f" [Linear: linear_{linear_ws}]" if linear_ws else ""
+        lines.append(f"- **{p['name']}**{alias_str}: `{p['path']}`{linear_str}")
         if p.get("description"):
             lines.append(f"  {p['description']}")
     return "\n".join(lines)
@@ -127,27 +129,68 @@ def load_system_prompt() -> str:
     return base + projects + memory
 
 
+def _load_project_paths() -> list[str]:
+    """Load all project paths from projects.json."""
+    projects_file = Path(__file__).parent / "projects.json"
+    if not projects_file.exists():
+        return []
+    data = json.loads(projects_file.read_text())
+    return [p["path"] for p in data.get("projects", []) if p.get("path")]
+
+
+def resolve_cwd_for_channel(channel: str, default_cwd: Path) -> Path:
+    """Resolve the working directory for a Slack channel.
+
+    Looks up the channel in projects.json and returns the first matching
+    project's path. Falls back to default_cwd if no match.
+    """
+    projects_file = Path(__file__).parent / "projects.json"
+    if not projects_file.exists():
+        return default_cwd
+
+    data = json.loads(projects_file.read_text())
+    for p in data.get("projects", []):
+        if p.get("slack_channel") == channel:
+            project_path = Path(p["path"])
+            if project_path.exists():
+                return project_path
+    return default_cwd
+
+
 def create_security_settings() -> SecuritySettings:
     """Create security settings with sandbox and permissions."""
+    # Base permissions for CWD and memory
+    allow = [
+        "Read(./**)",
+        "Write(./**)",
+        "Edit(./**)",
+        "Glob(./**)",
+        "Grep(./**)",
+        f"Read({MEMORY_DIR.resolve()}/**)",
+        f"Write({MEMORY_DIR.resolve()}/**)",
+        f"Edit({MEMORY_DIR.resolve()}/**)",
+        "Bash(*)",
+        *PLAYWRIGHT_TOOLS,
+        "mcp__github__*",
+    ]
+
+    # Add file access for all registered projects
+    for path in _load_project_paths():
+        allow.extend([
+            f"Read({path}/**)",
+            f"Write({path}/**)",
+            f"Edit({path}/**)",
+            f"Glob({path}/**)",
+            f"Grep({path}/**)",
+        ])
+
+    # Add all configured Linear workspace tools
+    for workspace_name in _load_linear_workspaces():
+        allow.append(f"mcp__linear_{workspace_name}__*")
+
     return SecuritySettings(
-        sandbox=SandboxConfig(enabled=True, autoAllowBashIfSandboxed=True),
-        permissions=PermissionsConfig(
-            defaultMode="acceptEdits",
-            allow=[
-                "Read(./**)",
-                "Write(./**)",
-                "Edit(./**)",
-                "Glob(./**)",
-                "Grep(./**)",
-                f"Read({MEMORY_DIR.resolve()}/**)",
-                f"Write({MEMORY_DIR.resolve()}/**)",
-                f"Edit({MEMORY_DIR.resolve()}/**)",
-                "Bash(*)",
-                *PLAYWRIGHT_TOOLS,
-                "mcp__github__*",
-                "mcp__linear__*",
-            ],
-        ),
+        sandbox=SandboxConfig(enabled=False),
+        permissions=PermissionsConfig(defaultMode="acceptEdits", allow=allow),
     )
 
 
@@ -160,8 +203,33 @@ def write_security_settings(work_dir: Path, settings: SecuritySettings) -> Path:
     return settings_file
 
 
+def _load_linear_workspaces() -> dict[str, str]:
+    """Load Linear workspace API keys from projects.json.
+
+    Returns a dict of {workspace_name: api_key} for all workspaces
+    whose env var is set.
+    """
+    projects_file = Path(__file__).parent / "projects.json"
+    if not projects_file.exists():
+        # Fallback: use root LINEAR_API_KEY if no registry
+        return {"linear": LINEAR_API_KEY} if LINEAR_API_KEY else {}
+
+    data = json.loads(projects_file.read_text())
+    workspaces = data.get("linear_workspaces", {})
+    if not workspaces:
+        return {"linear": LINEAR_API_KEY} if LINEAR_API_KEY else {}
+
+    result = {}
+    for name, config in workspaces.items():
+        env_var = config.get("api_key_env", "")
+        key = os.environ.get(env_var, "")
+        if key:
+            result[name] = key
+    return result
+
+
 def get_mcp_servers() -> dict[str, McpServerConfig]:
-    """Build MCP server configuration for GitHub, Linear, and Playwright."""
+    """Build MCP server configuration for GitHub, Linear workspaces, and Playwright."""
     servers: dict[str, McpServerConfig] = {
         "playwright": cast(
             McpServerConfig,
@@ -179,13 +247,15 @@ def get_mcp_servers() -> dict[str, McpServerConfig]:
             },
         )
 
-    if LINEAR_API_KEY:
-        servers["linear"] = cast(
+    # Create one Linear MCP server per workspace
+    for workspace_name, api_key in _load_linear_workspaces().items():
+        server_name = f"linear_{workspace_name}"
+        servers[server_name] = cast(
             McpServerConfig,
             {
                 "type": "http",
                 "url": "https://mcp.linear.app/mcp",
-                "headers": {"Authorization": f"Bearer {LINEAR_API_KEY}"},
+                "headers": {"Authorization": f"Bearer {api_key}"},
             },
         )
 
@@ -212,8 +282,9 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
     allowed_tools = [*BUILTIN_TOOLS, *PLAYWRIGHT_TOOLS]
     if GITHUB_TOKEN:
         allowed_tools.append("mcp__github__*")
-    if LINEAR_API_KEY:
-        allowed_tools.append("mcp__linear__*")
+    # Allow tools from all configured Linear workspaces
+    for workspace_name in _load_linear_workspaces():
+        allowed_tools.append(f"mcp__linear_{workspace_name}__*")
 
     return ClaudeSDKClient(
         options=ClaudeAgentOptions(
@@ -226,6 +297,18 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
                     HookMatcher(
                         matcher="Bash",
                         hooks=[cast(HookCallback, bash_security_hook)],
+                    ),
+                    HookMatcher(
+                        matcher="Read",
+                        hooks=[cast(HookCallback, file_read_guard_hook)],
+                    ),
+                    HookMatcher(
+                        matcher="Write",
+                        hooks=[cast(HookCallback, file_read_guard_hook)],
+                    ),
+                    HookMatcher(
+                        matcher="Edit",
+                        hooks=[cast(HookCallback, file_read_guard_hook)],
                     ),
                 ],
             },

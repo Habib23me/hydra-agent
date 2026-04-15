@@ -1,0 +1,37 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - link "Spend Log" [ref=e5] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e6]:
+          - link "Dashboard" [ref=e7] [cursor=pointer]:
+            - /url: /
+          - link "All Logs" [ref=e8] [cursor=pointer]:
+            - /url: /logs
+          - link "+ New Log" [ref=e9] [cursor=pointer]:
+            - /url: /logs/new
+    - main [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - heading "Welcome to Spend Log" [level=1] [ref=e13]
+          - paragraph [ref=e14]: Track your spending and manage your finances
+          - generic [ref=e15]:
+            - link "Add New Log" [ref=e16] [cursor=pointer]:
+              - /url: /logs/new
+            - link "View All Logs" [ref=e17] [cursor=pointer]:
+              - /url: /logs
+        - heading "Your Spending Statistics" [level=2] [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - heading "Track" [level=3] [ref=e23]
+            - paragraph [ref=e24]: Keep track of all your spending in one place
+          - generic [ref=e25]:
+            - heading "Analyze" [level=3] [ref=e26]
+            - paragraph [ref=e27]: View detailed statistics and spending patterns
+          - generic [ref=e28]:
+            - heading "Control" [level=3] [ref=e29]
+            - paragraph [ref=e30]: Manage and edit your spending logs easily
+    - contentinfo [ref=e31]:
+      - paragraph [ref=e33]: © 2026 Spend Log. All rights reserved.
+  - alert [ref=e34]

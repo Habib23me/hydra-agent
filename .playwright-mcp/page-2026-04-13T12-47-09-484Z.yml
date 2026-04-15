@@ -1,0 +1,39 @@
+- generic [ref=e4]:
+  - banner [ref=e5]
+  - generic [ref=e11]:
+    - generic [ref=e14]:
+      - heading "Log in" [level=1] [ref=e15]
+      - heading "Continue to Shopify" [level=3] [ref=e16]
+    - generic [ref=e17]:
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - text: james@gymlive.app
+          - textbox: james@gymlive.app
+        - link "Change email" [ref=e22] [cursor=pointer]:
+          - /url: /lookup/change-email?rid=209fe55f-9714-4a04-9d4e-89c36384b43e
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26] [cursor=pointer]: Password
+            - generic [ref=e27]:
+              - textbox "Password" [active] [ref=e28]
+              - button "Show password" [ref=e29] [cursor=pointer]:
+                - generic "Show password" [ref=e30]:
+                  - img [ref=e31]
+          - link "Forgot password?" [ref=e34] [cursor=pointer]:
+            - /url: /password-reset/new?rid=209fe55f-9714-4a04-9d4e-89c36384b43e
+        - button "Log in" [ref=e36] [cursor=pointer]:
+          - generic [ref=e37]:
+            - generic [ref=e38]: Log in
+            - img [ref=e40]
+  - contentinfo [ref=e42]:
+    - link "Need Help?" [ref=e44] [cursor=pointer]:
+      - /url: https://help.shopify.com/en/manual/your-account/logging-in#desktop
+    - generic [ref=e45]:
+      - text: By continuing, you agree to the
+      - link "Terms" [ref=e46] [cursor=pointer]:
+        - /url: https://www.shopify.com/legal/terms
+      - text: and
+      - link "Privacy Policy" [ref=e47] [cursor=pointer]:
+        - /url: https://www.shopify.com/legal/privacy
+      - text: .

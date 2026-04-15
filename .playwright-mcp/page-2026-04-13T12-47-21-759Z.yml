@@ -1,0 +1,19 @@
+- generic [ref=e3]:
+  - link:
+    - /url: "#AppFrameMain"
+  - img "Shopify" [ref=e13]
+  - generic [ref=e28]:
+    - navigation [ref=e30]:
+      - generic [ref=e31]:
+        - list [ref=e32]
+        - list [ref=e33]:
+          - listitem [ref=e34]:
+            - generic [ref=e35]:
+              - generic:
+                - button "Settings" [disabled]:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                  - generic: Settings
+    - main [ref=e36]

@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - link "Spend Log" [ref=e5] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e6]:
+          - link "Dashboard" [ref=e7] [cursor=pointer]:
+            - /url: /
+          - link "All Logs" [ref=e8] [cursor=pointer]:
+            - /url: /logs
+          - link "+ New Log" [ref=e9] [cursor=pointer]:
+            - /url: /logs/new
+    - main [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - heading "Spending Logs" [level=1] [ref=e13]
+          - paragraph [ref=e14]: View and manage all your spending logs
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: Category
+            - combobox [ref=e19]:
+              - option "All Categories" [selected]
+              - option "Food"
+              - option "Transportation"
+              - option "Entertainment"
+              - option "Shopping"
+              - option "Bills"
+              - option "Health"
+              - option "Education"
+              - option "Other"
+          - generic [ref=e20]:
+            - generic [ref=e21]: From Date
+            - textbox [ref=e22]
+          - generic [ref=e23]:
+            - generic [ref=e24]: To Date
+            - textbox [ref=e25]
+          - button "Reset" [ref=e26] [cursor=pointer]
+    - contentinfo [ref=e27]:
+      - paragraph [ref=e29]: © 2026 Spend Log. All rights reserved.
+  - alert [ref=e30]

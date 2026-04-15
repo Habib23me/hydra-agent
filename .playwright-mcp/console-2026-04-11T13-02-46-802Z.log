@@ -1,0 +1,19 @@
+[      31ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/:0
+[     101ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///../../node_modules/react-dom/cjs/react-dom.development.js:29889
+[     107ms] TypeError: Cannot read properties of null (reading 'useReducer')
+    at useReducer (file:///Volumes/mac_mini/spend-log/node_modules/react/cjs/react.development.js:1626:21)
+    at useErrorOverlayReducer (file:///Volumes/mac_mini/spend-log/node_modules/next/dist/client/components/react-dev-overlay/shared.js:87:34)
+    at ReactDevOverlay (file:///Volumes/mac_mini/spend-log/node_modules/next/dist/client/components/react-dev-overlay/pages/ReactDevOverlay.js:31:66)
+    at ReactDevOverlay (file:///Volumes/mac_mini/spend-log/node_modules/next/dist/server/dev/next-dev-server.js:100:12)
+    at renderWithHooks (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5732:15)
+    at renderElement (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6087:14)
+    at renderNode (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6270:12)
+    at renderHostElement (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5642:3)
+    at renderElement (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5963:5)
+    at renderNodeDestructiveImpl (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6087:14)
+    at renderIndeterminateComponent (file:///Volumes/mac_mini/spend-log/apps/web/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5786:7)
+[     105ms] [LOG] [HMR] connected @ webpack-internal:///../../node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38

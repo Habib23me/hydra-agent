@@ -80,13 +80,16 @@ ALLOWED_COMMANDS: set[str] = {
     # Environment inspection
     "which",
     "env",
+    "export",
     # Python (for file creation scripts)
     "python",
     "python3",
-    # Node.js development
+    # Node.js / Bun development
     "npm",
     "npx",
     "node",
+    "bun",
+    "bunx",
     # Mobile development
     "flutter",
     "dart",
@@ -127,6 +130,8 @@ def split_command_segments(command_string: str) -> list[str]:
         List of individual command segments
     """
     # Split on && and || while preserving the ability to handle each segment
+    # Pre-process to handle heredocs, subshells, etc.
+    command_string = _sanitize_for_parsing(command_string)
     # This regex splits on && or || that aren't inside quotes
     segments: list[str] = re.split(r"\s*(?:&&|\|\|)\s*", command_string)
 
@@ -140,6 +145,35 @@ def split_command_segments(command_string: str) -> list[str]:
                 result.append(sub)
 
     return result
+
+
+def _sanitize_for_parsing(command_string: str) -> str:
+    """Pre-process a command string to handle constructs that break shlex.
+
+    Strips heredocs, subshell parens, and process substitutions so the
+    underlying command names can be extracted reliably.
+    """
+    # Replace heredoc blocks: $(cat <<'EOF' ... EOF) or $(cat <<EOF ... EOF)
+    s = re.sub(r"""\$\(cat\s+<<'?(\w+)'?\s*\n.*?\n\1\s*\)""", '"HEREDOC"', command_string, flags=re.DOTALL)
+    # Replace standalone heredocs: <<'EOF' ... EOF or <<EOF ... EOF
+    s = re.sub(r"""<<-?'?(\w+)'?\s*\n.*?\n\1""", '"HEREDOC"', s, flags=re.DOTALL)
+    # Strip leading/trailing subshell parens: (git ...) → git ...
+    s = re.sub(r"^\(\s*", "", s)
+    s = re.sub(r"\s*\)$", "", s)
+    # Strip inline subshell parens in chained commands: && (git ...) → && git ...
+    s = re.sub(r"(?<=&&)\s*\(\s*", " ", s)
+    s = re.sub(r"\s*\)\s*(?=&&|\|\||;|$)", " ", s)
+    # Replace find -exec ... \; with just the find part (strip -exec block)
+    s = re.sub(r"-exec\s+.+?\\;", "", s)
+    s = re.sub(r"-exec\s+.+?\+", "", s)
+    # Replace sed expressions containing semicolons with a placeholder
+    # e.g., 's/x/y/g; s/a/b/g' → "SED_EXPR"
+    s = re.sub(r"'[^']*;[^']*'", '"SED_EXPR"', s)
+    # Replace inline python/node scripts: python3 -c "..." or python3 -c '...'
+    s = re.sub(r"""(python3?|node)\s+-[ce]\s+(['"]).*?\2""", r'\1 "INLINE_SCRIPT"', s, flags=re.DOTALL)
+    # Handle unmatched quotes in inline scripts (truncated by logging)
+    s = re.sub(r"""(python3?|node)\s+-[ce]\s+['"].*$""", r'\1 "INLINE_SCRIPT"', s)
+    return s
 
 
 def extract_commands(command_string: str) -> list[str]:
@@ -156,6 +190,9 @@ def extract_commands(command_string: str) -> list[str]:
         List of command names found in the string
     """
     commands: list[str] = []
+
+    # Pre-process to handle heredocs, subshells, etc.
+    command_string = _sanitize_for_parsing(command_string)
 
     # shlex doesn't treat ; as a separator, so we need to pre-process
     # Split on semicolons that aren't inside quotes (simple heuristic)
@@ -243,6 +280,9 @@ def validate_pkill_command(command_string: str) -> ValidationResult:
         "npx",
         "vite",
         "next",
+        "chromium",
+        "chrome",
+        "playwright",
     }
 
     try:
@@ -477,6 +517,44 @@ def get_command_for_validation(cmd: str, segments: list[str]) -> str:
 # Resolved path to the agent's own directory — writes here are blocked.
 _AGENT_DIR: str = str(Path(__file__).parent.resolve())
 
+# Track files that have been read in each session (keyed by session_id)
+_read_files: dict[str, set[str]] = {}
+
+
+async def file_read_guard_hook(
+    input_data: PreToolUseHookInput,
+    tool_use_id: str | None = None,
+    context: HookContext | None = None,
+) -> SyncHookJSONOutput:
+    """
+    Pre-tool-use hook that tracks Read calls and blocks Write/Edit on unread files.
+
+    This prevents the model from wasting tokens on write-before-read errors
+    by catching them earlier with a clear message.
+    """
+    tool_name = input_data.get("tool_name", "")
+    tool_input = input_data.get("tool_input", {})
+    session_id = input_data.get("session_id", "default")
+
+    if session_id not in _read_files:
+        _read_files[session_id] = set()
+
+    if tool_name == "Read":
+        file_path = tool_input.get("file_path", "")
+        if file_path:
+            _read_files[session_id].add(file_path)
+        return {}
+
+    if tool_name in ("Write", "Edit"):
+        file_path = tool_input.get("file_path", "")
+        if file_path and file_path not in _read_files[session_id]:
+            return SyncHookJSONOutput(
+                decision="block",
+                reason=f"You must Read '{file_path}' before using {tool_name} on it. Read the file first, then retry.",
+            )
+
+    return {}
+
 
 def _references_agent_dir(command: str) -> bool:
     """Check if a command references the agent's own installation directory."""
@@ -489,10 +567,11 @@ async def bash_security_hook(
     context: HookContext | None = None,
 ) -> SyncHookJSONOutput:
     """
-    Pre-tool-use hook that validates bash commands using an allowlist.
+    Pre-tool-use hook that validates bash commands using a denylist.
 
-    Only commands in ALLOWED_COMMANDS are permitted.
-    Commands that would modify the agent's own directory are blocked.
+    Blocks explicitly dangerous commands/patterns. Allows everything else.
+    This is more permissive than an allowlist but avoids wasting tokens
+    on blocked commands that are safe (like bun, base64, printf, etc.).
 
     Args:
         input_data: Dict containing tool_name and tool_input
@@ -509,42 +588,26 @@ async def bash_security_hook(
     if not command:
         return {}
 
-    # Block destructive commands that target the agent's own directory
-    destructive_cmds = {"rm", "mv", "cp", "git"}
-    cmds = extract_commands(command)
-    if any(c in destructive_cmds for c in cmds) and _references_agent_dir(command):
-        return SyncHookJSONOutput(
-            decision="block",
-            reason="Commands that modify the agent's own installation directory are not allowed",
-        )
-
-    # Extract all commands from the command string
-    commands: list[str] = extract_commands(command)
-
-    if not commands:
-        # Could not parse - fail safe by blocking
-        return SyncHookJSONOutput(
-            decision="block",
-            reason=f"Could not parse command for security validation: {command}",
-        )
-
-    # Split into segments for per-command validation
-    segments: list[str] = split_command_segments(command)
-
-    # Check each command against the allowlist
-    for cmd in commands:
-        if cmd not in ALLOWED_COMMANDS:
+    # Block any command that modifies the agent's own directory
+    if _references_agent_dir(command):
+        destructive_cmds = {"rm", "mv", "cp", "git"}
+        cmds = extract_commands(command)
+        if any(c in destructive_cmds for c in cmds):
             return SyncHookJSONOutput(
                 decision="block",
-                reason=f"Command '{cmd}' is not in the allowed commands list",
+                reason="Commands that modify the agent's own installation directory are not allowed",
             )
 
-        # Additional validation for sensitive commands
+    # Extract commands — if we can't parse, allow it (fail-open for usability)
+    commands: list[str] = extract_commands(command)
+    segments: list[str] = split_command_segments(command) if commands else []
+
+    # Validate dangerous commands that need extra checks
+    for cmd in commands:
         if cmd in COMMANDS_NEEDING_EXTRA_VALIDATION:
-            # Find the specific segment containing this command
             cmd_segment: str = get_command_for_validation(cmd, segments)
             if not cmd_segment:
-                cmd_segment = command  # Fallback to full command
+                cmd_segment = command
 
             if cmd == "pkill":
                 result: ValidationResult = validate_pkill_command(cmd_segment)

@@ -83,6 +83,9 @@ async def run_turn(
                         is_error = bool(block.is_error) if block.is_error else False
                         if is_error:
                             error_str = str(block.content)[:200]
+                            # Suppress noisy non-critical errors
+                            if "Exit code 1" in error_str or "Sibling tool call errored" in error_str:
+                                continue
                             print(f"  [Error] {error_str}", flush=True)
 
             elif isinstance(msg, ResultMessage):

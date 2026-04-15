@@ -78,6 +78,24 @@ def strip_mention(text: str) -> str:
     return re.sub(r"<@[A-Z0-9]+>", "", text).strip()
 
 
+def extract_file_info(event: dict) -> str:
+    """Extract file descriptions from a Slack event with attachments."""
+    files = event.get("files", [])
+    if not files:
+        return ""
+    descriptions = []
+    for f in files:
+        name = f.get("name", "unknown")
+        filetype = f.get("filetype", "")
+        url = f.get("url_private", "")
+        size = f.get("size", 0)
+        desc = f"[Attached file: {name} ({filetype}, {size} bytes)]"
+        if url:
+            desc += f" Download: {url}"
+        descriptions.append(desc)
+    return "\n".join(descriptions)
+
+
 # =============================================================================
 # Event handlers
 # =============================================================================
@@ -94,6 +112,9 @@ async def handle_app_mention(event: dict, say, client) -> None:
         return
 
     text = strip_mention(event.get("text", ""))
+    file_info = extract_file_info(event)
+    if file_info:
+        text = f"{text}\n\n{file_info}" if text else file_info
     if not text:
         return
 
@@ -111,8 +132,11 @@ async def handle_app_mention(event: dict, say, client) -> None:
 async def handle_message(event: dict, say, client) -> None:
     """Handle messages in threads where the bot has an active session.
     """
-    # Ignore bot messages and subtypes (edits, deletes, etc.)
-    if event.get("bot_id") or event.get("subtype"):
+    # Ignore bot messages and non-content subtypes (edits, deletes, etc.)
+    if event.get("bot_id"):
+        return
+    subtype = event.get("subtype")
+    if subtype and subtype not in ("file_share",):
         return
 
     # Only handle thread replies
@@ -126,12 +150,17 @@ async def handle_message(event: dict, say, client) -> None:
     if not sessions.has_session(channel, thread_ts):
         return
 
-    # Skip @mentions (handled by handle_app_mention)
+    # Skip @mentions (handled by handle_app_mention) unless it's a file_share
     text_raw = event.get("text", "")
-    if re.search(r"<@[A-Z0-9]+>", text_raw):
+    subtype = event.get("subtype")
+    if re.search(r"<@[A-Z0-9]+>", text_raw) and subtype != "file_share":
         return
 
-    text = text_raw.strip()
+    text = strip_mention(text_raw) if re.search(r"<@[A-Z0-9]+>", text_raw) else text_raw.strip()
+    file_info = extract_file_info(event)
+    if file_info:
+        text = f"{text}\n\n{file_info}" if text else file_info
+
     if not text:
         return
 
@@ -168,8 +197,10 @@ def validate_env() -> bool:
     # Warnings for optional integrations
     if not os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"):
         print("Warning: GITHUB_PERSONAL_ACCESS_TOKEN not set — GitHub MCP disabled")
-    if not os.environ.get("LINEAR_API_KEY"):
-        print("Warning: LINEAR_API_KEY not set — Linear MCP disabled")
+    from client import _load_linear_workspaces
+    linear_ws = _load_linear_workspaces()
+    if not linear_ws:
+        print("Warning: No Linear API keys configured — Linear MCP disabled")
 
     return True
 
@@ -191,7 +222,12 @@ async def main() -> None:
     print("=" * 60)
     print(f"\nDefault working dir: {DEFAULT_CWD}")
     print(f"GitHub MCP: {'enabled' if os.environ.get('GITHUB_PERSONAL_ACCESS_TOKEN') else 'disabled'}")
-    print(f"Linear MCP: {'enabled' if os.environ.get('LINEAR_API_KEY') else 'disabled'}")
+    from client import _load_linear_workspaces
+    linear_ws = _load_linear_workspaces()
+    if linear_ws:
+        print(f"Linear MCP: enabled ({', '.join(linear_ws.keys())})")
+    else:
+        print("Linear MCP: disabled")
     print()
     print("@mention the bot in any channel to start a conversation.")
     print("Reply in the thread to continue the conversation.")

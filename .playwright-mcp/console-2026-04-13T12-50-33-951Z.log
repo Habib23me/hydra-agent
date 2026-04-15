@@ -1,0 +1,3 @@
+[    6695ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://gymlive.app/events:0
+[    8595ms] [LOG] [Framer On-Page Editing] Unavailable because not on a `framer.app` subdomain and access status is no-auth @ https://app.framerstatic.com/editorbar.GBQOKKUW.mjs:0
+[   10210ms] [LOG] [Framer On-Page Editing] Unavailable because not on a `framer.app` subdomain and access status is no-auth @ https://app.framerstatic.com/editorbar.GBQOKKUW.mjs:0

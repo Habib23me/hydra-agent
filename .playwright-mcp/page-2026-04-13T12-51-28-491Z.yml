@@ -1,0 +1,331 @@
+- generic [active] [ref=e1]:
+  - link "Skip to content" [ref=e2] [cursor=pointer]:
+    - /url: "#MainContent"
+  - heading "Welcome to our store" [level=3] [ref=e7]
+  - paragraph [ref=e15]:
+    - strong [ref=e16]: 🏋️️ Free 1 Month Membership to GymLive App With Every Purchase🛍️
+  - banner [ref=e19]:
+    - heading "Gym Live" [level=1] [ref=e20]:
+      - link "Gym Live" [ref=e21] [cursor=pointer]:
+        - /url: /
+        - img "Gym Live" [ref=e23]
+    - navigation [ref=e24]:
+      - list [ref=e25]:
+        - listitem [ref=e26]:
+          - link "For Sports Clubs" [ref=e27] [cursor=pointer]:
+            - /url: /pages/for-sports-clubs
+            - generic [ref=e28]: For Sports Clubs
+        - listitem [ref=e29]:
+          - link "For Gyms" [ref=e30] [cursor=pointer]:
+            - /url: /pages/for-gyms
+            - generic [ref=e31]: For Gyms
+        - listitem [ref=e32]:
+          - link "Products" [ref=e33] [cursor=pointer]:
+            - /url: /pages/products
+            - generic [ref=e34]: Products
+    - generic [ref=e35]:
+      - group [ref=e37]:
+        - button "Search" [ref=e38] [cursor=pointer]:
+          - img [ref=e40]
+      - link "Log in" [ref=e43] [cursor=pointer]:
+        - /url: https://gymlive.shop/customer_authentication/redirect?locale=en&region_country=IE
+        - img [ref=e44]
+        - generic [ref=e47]: Log in
+      - button "Cart €0,00 0 items" [ref=e48] [cursor=pointer]:
+        - img [ref=e49]
+        - generic [ref=e53]: Cart
+        - generic [ref=e54]:
+          - generic [ref=e55]: €0,00
+          - generic [ref=e56]: (0)
+          - generic [ref=e57]: 0 items
+  - main [ref=e58]:
+    - region "Slideshow" [ref=e60]:
+      - group "1 of 1" [ref=e62]
+    - list [ref=e70]:
+      - listitem [ref=e71]:
+        - generic [ref=e72]:
+          - img [ref=e74]
+          - heading "Fast delivery" [level=3] [ref=e79]
+      - listitem [ref=e80]:
+        - generic [ref=e81]:
+          - img [ref=e83]
+          - generic [ref=e87]:
+            - heading "Free 1 Month Gym[live•] subscription" [level=3] [ref=e88]
+            - paragraph [ref=e90]: with every product purchased!
+      - listitem [ref=e91]:
+        - generic [ref=e92]:
+          - img [ref=e94]
+          - generic [ref=e100]:
+            - heading "56 gym and wellness classes" [level=3] [ref=e101]
+            - paragraph [ref=e103]: Per month included in your free subscription
+    - list [ref=e109]:
+      - listitem [ref=e110]:
+        - generic [ref=e112]:
+          - link "collection-list-item" [ref=e114] [cursor=pointer]:
+            - /url: /collections/weights
+            - text: Weights
+          - generic [ref=e118]:
+            - generic [ref=e119]: 1 Items
+            - heading "Weights" [level=3] [ref=e121]:
+              - link "Weights" [ref=e122] [cursor=pointer]:
+                - /url: /collections/weights
+      - listitem [ref=e123]:
+        - generic [ref=e125]:
+          - link "collection-list-item" [ref=e127] [cursor=pointer]:
+            - /url: /collections/resistance-bands
+            - text: Resistance Bands
+          - generic [ref=e131]:
+            - generic [ref=e132]: 1 Items
+            - heading "Resistance Bands" [level=3] [ref=e134]:
+              - link "Resistance Bands" [ref=e135] [cursor=pointer]:
+                - /url: /collections/resistance-bands
+      - listitem [ref=e136]:
+        - generic [ref=e138]:
+          - link "collection-list-item" [ref=e140] [cursor=pointer]:
+            - /url: /collections/gym-wear
+            - text: Gym Wear
+          - generic [ref=e144]:
+            - generic [ref=e145]: 1 Items
+            - heading "Gym Wear" [level=3] [ref=e147]:
+              - link "Gym Wear" [ref=e148] [cursor=pointer]:
+                - /url: /collections/gym-wear
+    - generic [ref=e153]:
+      - paragraph [ref=e155]:
+        - strong [ref=e156]: Feel you best self
+      - heading "GymLive Discovery PASS €5 per week PASS €5 per week" [level=2] [ref=e157]:
+        - text: GymLive Discovery
+        - generic [ref=e159]:
+          - generic [ref=e160]: PASS
+          - generic: €5 per week
+          - generic: PASS
+          - generic: €5 per week
+      - paragraph [ref=e162]:
+        - text: Join a community that trains
+        - emphasis [ref=e163]: with
+        - text: you, cheers for you, and grows alongside you.
+        - text: Download GymLive and share your progress your story might inspire someone else to start theirs.
+      - link "Download GymLive Suggestion" [ref=e165] [cursor=pointer]:
+        - /url: https://onelink.to/caufds
+        - text: Download GymLive
+        - generic [ref=e166]:
+          - text: Suggestion
+          - img [ref=e167]
+    - generic [ref=e173]:
+      - region "Gallery Viewer" [ref=e175]:
+        - generic [ref=e176]:
+          - link "Skip to product information" [ref=e177] [cursor=pointer]:
+            - /url: "#ProductInfo-template--27284989509970__featured_product"
+          - list [ref=e178]:
+            - listitem [ref=e179]
+      - generic [ref=e184]:
+        - paragraph [ref=e185]: Gym Live
+        - heading "Kettlebell" [level=2] [ref=e186]
+        - paragraph [ref=e188]: 🔥 Congratulations! Order now to save 10% on your order and get 1 month GYM[LIVE•] App membership!
+        - status [ref=e189]:
+          - generic [ref=e190]:
+            - generic [ref=e192]:
+              - generic [ref=e193]: Regular price
+              - generic [ref=e194]: €20,00
+            - generic [ref=e195]: Sold out
+        - generic [ref=e196]: Tax included.
+        - status [ref=e197]:
+          - paragraph [ref=e198]:
+            - generic [ref=e199]: Availability:Out of stock
+        - generic [ref=e204]:
+          - generic [ref=e205]:
+            - generic [ref=e206]:
+              - button "Decrease quantity for Kettlebell" [ref=e207]:
+                - generic [ref=e208]: Decrease quantity for Kettlebell
+                - img
+              - generic: Quantity
+              - spinbutton "Quantity" [ref=e209]: "1"
+              - button "Increase quantity for Kettlebell" [ref=e210] [cursor=pointer]:
+                - generic [ref=e211]: Increase quantity for Kettlebell
+                - img
+            - button "Sold out" [disabled] [ref=e212]:
+              - generic [ref=e213]: Sold out
+          - generic [ref=e216]:
+            - generic [ref=e219]:
+              - iframe [ref=e220]:
+                - generic "PayPal" [ref=f18e2]:
+                  - link "Pay with PayPal" [ref=f18e5] [cursor=pointer]
+              - iframe [ref=e221]:
+                - link "PayPal" [ref=f19e4] [cursor=pointer]
+            - link "More payment options" [ref=e223] [cursor=pointer]
+        - list [ref=e224]:
+          - listitem [ref=e225]:
+            - img [ref=e226]
+            - strong [ref=e230]: 100% Authentic
+          - listitem [ref=e231]:
+            - img [ref=e232]
+            - strong [ref=e236]: 10 Day Return
+          - listitem [ref=e237]:
+            - img [ref=e238]
+            - strong [ref=e243]: Free Shipping
+        - generic [ref=e244]:
+          - paragraph [ref=e245]: Grab the discount
+          - generic: A1B2 3C4D 5E6F 7G8H
+          - generic [ref=e246]:
+            - textbox "A1B2 3C4D 5E6F 7G8H" [ref=e247]
+            - button "Copy" [ref=e248] [cursor=pointer]
+        - button "Share" [ref=e250] [cursor=pointer]:
+          - img [ref=e251]
+          - text: Share
+        - link "View full details" [ref=e257] [cursor=pointer]:
+          - /url: /products/kettlebell
+    - generic [ref=e261]:
+      - generic [ref=e263]:
+        - heading "BENEFITS OVERVIEW" [level=2] [ref=e264]
+        - paragraph [ref=e266]:
+          - text: Discover the powerful benefits of
+          - strong [ref=e267]: GymLive
+          - text: ", where expert coaching, real-time training, and a motivating community come together to transform your fitness. From boosted energy and improved strength to enhanced focus and overall well-being, GymLive makes high-quality training accessible anywhere LIVE."
+        - link "Learn More" [ref=e269] [cursor=pointer]:
+          - /url: https://onelink.to/caufds
+      - generic [ref=e270]:
+        - generic [ref=e271]: VS
+        - generic [ref=e272]:
+          - heading "Gym[Live•] app" [level=3] [ref=e273]
+          - generic [ref=e274]:
+            - paragraph [ref=e275]:
+              - strong [ref=e276]: ✅ Train anywhere — laptop, phone, or TV
+            - paragraph [ref=e277]:
+              - strong [ref=e278]: ✅ 14 live coach-led classes every week
+            - paragraph [ref=e279]:
+              - strong [ref=e280]: ✅ Real coaches who actually know your goals
+            - paragraph [ref=e281]:
+              - strong [ref=e282]: ✅ A supportive community that keeps you accountable
+            - paragraph [ref=e283]:
+              - strong [ref=e284]: ✅ Weekly targets that keep you motivated and progressing
+            - paragraph [ref=e285]:
+              - text: ✅
+              - strong [ref=e286]: Seamless sync with all major wearables, Fresh, varied workouts so you never get bored
+            - paragraph [ref=e287]
+        - generic [ref=e288]:
+          - heading "Other gym apps" [level=3] [ref=e289]
+          - generic [ref=e290]:
+            - paragraph [ref=e291]:
+              - strong [ref=e292]: ❌ No real-time coaching — mostly prerecorded workouts
+            - paragraph [ref=e293]:
+              - strong [ref=e294]: ❌ Generic programs not tailored to your goals
+            - paragraph [ref=e295]:
+              - strong [ref=e296]: ❌ Little or no accountability to keep you on track
+            - paragraph [ref=e297]:
+              - strong [ref=e298]: ❌ Limited or no community support
+            - paragraph [ref=e299]:
+              - strong [ref=e300]: ❌ Hidden costs for premium features,
+            - paragraph [ref=e301]:
+              - strong [ref=e302]: ❌ No live feedback on form or technique
+    - generic [ref=e307]:
+      - list [ref=e308]:
+        - listitem [ref=e309]:
+          - generic [ref=e310]:
+            - img [ref=e312]
+            - blockquote [ref=e314]:
+              - paragraph [ref=e315]:
+                - text: “In just one month with the Discovery Pass, I noticed a huge difference in my energy, strength, and motivation.
+                - text: Trying different class types helped me build a routine I actually enjoy.
+                - text: GymLive is the first program that’s truly stuck.”
+            - generic [ref=e316]:
+              - paragraph [ref=e317]: Gymlive User
+              - heading "Roy Dempsey" [level=4] [ref=e318]
+            - generic [ref=e319]:
+              - img [ref=e320]
+              - text: Verified customer
+        - listitem [ref=e323]:
+          - generic [ref=e324]:
+            - img [ref=e326]
+            - blockquote [ref=e328]:
+              - paragraph [ref=e329]:
+                - text: The GymLive Discovery Pass blew me away.
+                - text: I tried Yoga, HIIT, Pilates, and Kettlebells all live, all with real coaches who actually paid attention.
+                - text: The variety kept me motivated and I genuinely looked forward to every class.
+                - text: It’s the best jump-start I’ve ever had for my fitness.”
+            - generic [ref=e330]:
+              - paragraph [ref=e331]: Fitness Wonders
+              - heading "ANNA P" [level=4] [ref=e332]
+            - generic [ref=e333]:
+              - img [ref=e334]
+              - text: Verified customer
+        - listitem [ref=e337]:
+          - generic [ref=e338]:
+            - img [ref=e340]
+            - blockquote [ref=e342]:
+              - paragraph [ref=e343]:
+                - text: "\"From Yoga to HIIT and Pilates, every live class is expertly led and incredibly engaging."
+                - text: It’s a premium fitness experience at an unbeatable introductory price.”
+            - generic [ref=e344]:
+              - paragraph [ref=e345]: GymLive User
+              - heading "THAI R" [level=4] [ref=e346]
+            - generic [ref=e347]:
+              - img [ref=e348]
+              - text: Verified customer
+        - listitem [ref=e351]:
+          - generic [ref=e352]:
+            - img [ref=e354]
+            - blockquote [ref=e356]:
+              - heading "MORE THAN A GYM STORE – IT'S A WELLNESS WONDERLAND! FROM SUPPLEMENTS TO SELF-CARE PRODUCTS, THEY CATER TO EVERY ASPECT OF HEALTH." [level=3] [ref=e357]
+            - generic [ref=e358]:
+              - paragraph [ref=e359]: Wellness Wonderland
+              - heading "PETER T" [level=4] [ref=e360]
+            - generic [ref=e361]:
+              - img [ref=e362]
+              - text: Verified customer
+      - generic [ref=e367]:
+        - button "Slide left" [disabled] [ref=e368] [cursor=pointer]:
+          - img [ref=e369]
+        - button "testimonial-slider-dots" [ref=e372] [cursor=pointer]
+        - button "testimonial-slider-dots" [ref=e375] [cursor=pointer]
+        - button "testimonial-slider-dots" [ref=e378] [cursor=pointer]
+        - button "testimonial-slider-dots" [ref=e381] [cursor=pointer]
+        - button "Slide right" [ref=e384] [cursor=pointer]:
+          - img [ref=e385]
+  - contentinfo [ref=e389]:
+    - heading "Feel A [LIVE•] Again!" [level=2] [ref=e393]
+    - generic [ref=e396]:
+      - generic [ref=e397]:
+        - heading "Our Store" [level=2] [ref=e398]
+        - list [ref=e400]:
+          - listitem [ref=e401]:
+            - link "Home" [ref=e402] [cursor=pointer]:
+              - /url: /
+          - listitem [ref=e403]:
+            - link "Catalog" [ref=e404] [cursor=pointer]:
+              - /url: /collections/all
+          - listitem [ref=e405]:
+            - link "Contact" [ref=e406] [cursor=pointer]:
+              - /url: /pages/contact
+      - generic [ref=e407]:
+        - heading "Information" [level=2] [ref=e408]
+        - list [ref=e410]:
+          - listitem [ref=e411]:
+            - link "Search" [ref=e412] [cursor=pointer]:
+              - /url: /search
+      - generic [ref=e413]:
+        - heading "Quick links" [level=2] [ref=e414]
+        - list [ref=e416]:
+          - listitem [ref=e417]:
+            - link "Search" [ref=e418] [cursor=pointer]:
+              - /url: /search
+      - generic [ref=e419]:
+        - heading "We accept" [level=2] [ref=e420]
+        - generic [ref=e423]:
+          - generic [ref=e424]: Payment methods
+          - list [ref=e425]:
+            - listitem [ref=e426]:
+              - img "PayPal" [ref=e427]
+    - generic [ref=e434]:
+      - generic [ref=e435]:
+        - generic [ref=e436]:
+          - text: "2026"
+          - link "Gym Live" [ref=e437] [cursor=pointer]:
+            - /url: /
+          - text: . All rights reserved
+        - generic [ref=e438]:
+          - text: "|"
+          - link "Powered by Shopify" [ref=e439] [cursor=pointer]:
+            - /url: https://www.shopify.com?utm_campaign=poweredby&utm_medium=shopify&utm_source=onlinestore
+      - list [ref=e441]:
+        - listitem [ref=e442]:
+          - link "Privacy policy" [ref=e444] [cursor=pointer]:
+            - /url: /policies/privacy-policy
