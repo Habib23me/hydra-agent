@@ -28,7 +28,10 @@ load_dotenv()
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
+from slack_sdk.web.async_client import AsyncWebClient
+
 from session_manager import SessionManager
+from task_listener import TaskListener, build_task_listener_config
 
 
 # =============================================================================
@@ -78,6 +81,21 @@ def strip_mention(text: str) -> str:
     return re.sub(r"<@[A-Z0-9]+>", "", text).strip()
 
 
+# Patterns commonly used in prompt injection attempts
+_INJECTION_PATTERNS = [
+    re.compile(r"<\[\|.*?\|\]>", re.DOTALL),           # <[|...|]> wrapper
+    re.compile(r"UserQuery:\s*variable\s+\w+\.\s*\w+\s*=\s*\[", re.IGNORECASE),  # UserQuery: variable Z. Z = [...]
+    re.compile(r"ResponseFormat:\s*1\.\s*your\s+refu", re.IGNORECASE),            # ResponseFormat: 1. your refu...
+    re.compile(r"ignore\s+(all\s+)?(previous|prior|above)\s+instructions", re.IGNORECASE),
+    re.compile(r"(reveal|show|print|output|repeat)\s+(your\s+)?system\s*prompt", re.IGNORECASE),
+]
+
+
+def looks_like_injection(text: str) -> bool:
+    """Check if message text contains common prompt injection patterns."""
+    return any(p.search(text) for p in _INJECTION_PATTERNS)
+
+
 def extract_file_info(event: dict) -> str:
     """Extract file descriptions from a Slack event with attachments."""
     files = event.get("files", [])
@@ -125,6 +143,14 @@ async def handle_app_mention(event: dict, say, client) -> None:
     print(f"\n[@mention] channel={channel} thread={thread_ts}")
     print(f"  Text: {text[:100]}")
 
+    if looks_like_injection(text):
+        print(f"  [SECURITY] Prompt injection attempt detected, ignoring")
+        await say(
+            text=":shield: Nice try. This message looks like a prompt injection attempt and has been ignored.",
+            thread_ts=thread_ts,
+        )
+        return
+
     await sessions.process_message(channel, thread_ts, text, say, slack_client=client)
 
 
@@ -167,6 +193,14 @@ async def handle_message(event: dict, say, client) -> None:
     print(f"\n[Thread reply] channel={channel} thread={thread_ts}")
     print(f"  Text: {text[:100]}")
 
+    if looks_like_injection(text):
+        print(f"  [SECURITY] Prompt injection attempt detected, ignoring")
+        await say(
+            text=":shield: Nice try. This message looks like a prompt injection attempt and has been ignored.",
+            thread_ts=thread_ts,
+        )
+        return
+
     await sessions.process_message(channel, thread_ts, text, say, slack_client=client)
 
 
@@ -197,10 +231,13 @@ def validate_env() -> bool:
     # Warnings for optional integrations
     if not os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"):
         print("Warning: GITHUB_PERSONAL_ACCESS_TOKEN not set — GitHub MCP disabled")
-    from client import _load_linear_workspaces
+    from client import _load_linear_workspaces, _load_sentry_orgs
     linear_ws = _load_linear_workspaces()
     if not linear_ws:
         print("Warning: No Linear API keys configured — Linear MCP disabled")
+    sentry_orgs = _load_sentry_orgs()
+    if not sentry_orgs:
+        print("Warning: No Sentry auth tokens configured — Sentry MCP disabled")
 
     return True
 
@@ -222,12 +259,17 @@ async def main() -> None:
     print("=" * 60)
     print(f"\nDefault working dir: {DEFAULT_CWD}")
     print(f"GitHub MCP: {'enabled' if os.environ.get('GITHUB_PERSONAL_ACCESS_TOKEN') else 'disabled'}")
-    from client import _load_linear_workspaces
+    from client import _load_linear_workspaces, _load_sentry_orgs
     linear_ws = _load_linear_workspaces()
     if linear_ws:
         print(f"Linear MCP: enabled ({', '.join(linear_ws.keys())})")
     else:
         print("Linear MCP: disabled")
+    sentry_orgs = _load_sentry_orgs()
+    if sentry_orgs:
+        print(f"Sentry MCP: enabled ({', '.join(sentry_orgs.keys())})")
+    else:
+        print("Sentry MCP: disabled")
     print()
     print("@mention the bot in any channel to start a conversation.")
     print("Reply in the thread to continue the conversation.")
@@ -236,6 +278,20 @@ async def main() -> None:
 
     # Start idle session cleanup task
     asyncio.create_task(cleanup_loop())
+
+    # Start Linear task listener (auto-pickup assigned issues)
+    listener_config = build_task_listener_config()
+    if listener_config:
+        slack_web_client = AsyncWebClient(token=SLACK_BOT_TOKEN)
+        listener = TaskListener(
+            slack_client=slack_web_client,
+            session_manager=sessions,
+            workspaces=listener_config,
+        )
+        asyncio.create_task(listener.start())
+        print(f"Task listener: enabled ({', '.join(listener_config.keys())})")
+    else:
+        print("Task listener: disabled (no bot_user_id configured)")
 
     handler = AsyncSocketModeHandler(app, SLACK_APP_TOKEN)
     await handler.start_async()
@@ -249,4 +305,9 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\n\nStopped by user.")
+        # Clean up all sessions to avoid "Unclosed client session" warnings
+        try:
+            asyncio.run(sessions.close_all())
+        except Exception:
+            pass
         sys.exit(0)

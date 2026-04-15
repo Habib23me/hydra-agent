@@ -4,7 +4,23 @@
       "name": "my-app",
       "path": "/home/user/projects/my-app",
       "aliases": ["myapp", "my app"],
-      "description": "My App -- short description of the project"
+      "description": "My App -- short description of the project",
+      "linear_workspace": "my-workspace",
+      "sentry_org": "my-org",
+      "slack_channel": "C0123456789"
     }
-  ]
+  ],
+  "linear_workspaces": {
+    "my-workspace": {
+      "api_key_env": "LINEAR_API_KEY",
+      "description": "My Linear workspace",
+      "bot_user_id": ""
+    }
+  },
+  "sentry_orgs": {
+    "my-org": {
+      "auth_token_env": "SENTRY_AUTH_TOKEN",
+      "description": "My Sentry organization"
+    }
+  }
 }

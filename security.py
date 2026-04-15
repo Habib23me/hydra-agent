@@ -79,8 +79,6 @@ ALLOWED_COMMANDS: set[str] = {
     "curl",
     # Environment inspection
     "which",
-    "env",
-    "export",
     # Python (for file creation scripts)
     "python",
     "python3",
@@ -598,9 +596,33 @@ async def bash_security_hook(
                 reason="Commands that modify the agent's own installation directory are not allowed",
             )
 
-    # Extract commands — if we can't parse, allow it (fail-open for usability)
+    # Extract commands — fail-closed: if we can't parse, block it
     commands: list[str] = extract_commands(command)
-    segments: list[str] = split_command_segments(command) if commands else []
+    if not commands:
+        return SyncHookJSONOutput(
+            decision="block",
+            reason="Could not parse command for security validation: " + command[:120],
+        )
+
+    segments: list[str] = split_command_segments(command)
+
+    # Block commands not in the allowlist
+    for cmd in commands:
+        if cmd not in ALLOWED_COMMANDS:
+            return SyncHookJSONOutput(
+                decision="block",
+                reason=f"Command '{cmd}' is not in the allowed commands list",
+            )
+
+    # Block commands that reference secret environment variables
+    secret_vars = {"SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                   "LINEAR_API_KEY", "LINEAR_API_KEY_VIASLIM"}
+    for var in secret_vars:
+        if f"${var}" in command or f"${{{var}}}" in command:
+            return SyncHookJSONOutput(
+                decision="block",
+                reason=f"Commands referencing secret variable {var} are not allowed",
+            )
 
     # Validate dangerous commands that need extra checks
     for cmd in commands:

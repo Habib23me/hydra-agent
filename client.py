@@ -80,7 +80,9 @@ def load_projects_registry() -> str:
         alias_str = f" (also: {aliases})" if aliases else ""
         linear_ws = p.get("linear_workspace", "")
         linear_str = f" [Linear: linear_{linear_ws}]" if linear_ws else ""
-        lines.append(f"- **{p['name']}**{alias_str}: `{p['path']}`{linear_str}")
+        sentry_org = p.get("sentry_org", "")
+        sentry_str = f" [Sentry: sentry_{sentry_org}]" if sentry_org else ""
+        lines.append(f"- **{p['name']}**{alias_str}: `{p['path']}`{linear_str}{sentry_str}")
         if p.get("description"):
             lines.append(f"  {p['description']}")
     return "\n".join(lines)
@@ -188,6 +190,10 @@ def create_security_settings() -> SecuritySettings:
     for workspace_name in _load_linear_workspaces():
         allow.append(f"mcp__linear_{workspace_name}__*")
 
+    # Add all configured Sentry org tools
+    for org_name in _load_sentry_orgs():
+        allow.append(f"mcp__sentry_{org_name}__*")
+
     return SecuritySettings(
         sandbox=SandboxConfig(enabled=False),
         permissions=PermissionsConfig(defaultMode="acceptEdits", allow=allow),
@@ -201,6 +207,30 @@ def write_security_settings(work_dir: Path, settings: SecuritySettings) -> Path:
     with open(settings_file, "w") as f:
         json.dump(settings, f, indent=2)
     return settings_file
+
+
+def _load_sentry_orgs() -> dict[str, str]:
+    """Load Sentry org auth tokens from projects.json.
+
+    Returns a dict of {org_name: auth_token} for all orgs
+    whose env var is set.
+    """
+    projects_file = Path(__file__).parent / "projects.json"
+    if not projects_file.exists():
+        return {}
+
+    data = json.loads(projects_file.read_text())
+    orgs = data.get("sentry_orgs", {})
+    if not orgs:
+        return {}
+
+    result = {}
+    for name, config in orgs.items():
+        env_var = config.get("auth_token_env", "")
+        token = os.environ.get(env_var, "")
+        if token:
+            result[name] = token
+    return result
 
 
 def _load_linear_workspaces() -> dict[str, str]:
@@ -233,7 +263,7 @@ def get_mcp_servers() -> dict[str, McpServerConfig]:
     servers: dict[str, McpServerConfig] = {
         "playwright": cast(
             McpServerConfig,
-            {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--browser", "chromium"]},
+            {"command": "npx", "args": ["-y", "@playwright/mcp@0.0.70", "--browser", "chromium"]},
         ),
     }
 
@@ -256,6 +286,18 @@ def get_mcp_servers() -> dict[str, McpServerConfig]:
                 "type": "http",
                 "url": "https://mcp.linear.app/mcp",
                 "headers": {"Authorization": f"Bearer {api_key}"},
+            },
+        )
+
+    # Create one Sentry MCP server per org (stdio transport with auth token)
+    for org_name, auth_token in _load_sentry_orgs().items():
+        server_name = f"sentry_{org_name}"
+        servers[server_name] = cast(
+            McpServerConfig,
+            {
+                "command": "npx",
+                "args": ["-y", "@sentry/mcp-server"],
+                "env": {"SENTRY_ACCESS_TOKEN": auth_token},
             },
         )
 
@@ -285,6 +327,9 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
     # Allow tools from all configured Linear workspaces
     for workspace_name in _load_linear_workspaces():
         allowed_tools.append(f"mcp__linear_{workspace_name}__*")
+    # Allow tools from all configured Sentry orgs
+    for org_name in _load_sentry_orgs():
+        allowed_tools.append(f"mcp__sentry_{org_name}__*")
 
     return ClaudeSDKClient(
         options=ClaudeAgentOptions(

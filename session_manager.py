@@ -37,7 +37,10 @@ IDLE_TIMEOUT_SECONDS = 1800
 MAX_RECONNECT_RETRIES = 2
 
 # Cost guard: max USD spend per session before auto-stopping
-MAX_SESSION_COST_USD = float(os.environ.get("MAX_SESSION_COST_USD", "1.0"))
+MAX_SESSION_COST_USD = float(os.environ.get("MAX_SESSION_COST_USD", "10.0"))
+
+# Warn when session reaches this fraction of the budget (e.g. 80%)
+BUDGET_WARN_THRESHOLD = 0.8
 
 # Max consecutive errors before circuit-breaking
 MAX_CONSECUTIVE_ERRORS = 5
@@ -152,8 +155,10 @@ class SessionManager:
                     return
                 try:
                     display = text.strip()
-                    if len(display) > 3900:
-                        display = display[-3900:]
+                    # Slack messages have a ~40k char / ~40k byte limit.
+                    # For streaming updates, keep it shorter to avoid msg_too_long.
+                    if len(display.encode("utf-8")) > 3800:
+                        display = display[-3800:]
                     if not is_final:
                         display += "\n\n:writing_hand: _typing..._"
                     await slack_client.chat_update(
@@ -162,7 +167,18 @@ class SessionManager:
                         text=display,
                     )
                 except Exception as e:
-                    print(f"  [Stream] Update failed: {e}")
+                    err_str = str(e)
+                    if "msg_too_long" in err_str:
+                        # Truncate harder and retry once
+                        try:
+                            display = text.strip()[-2000:]
+                            await slack_client.chat_update(
+                                channel=channel, ts=thinking_ts, text=display,
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        print(f"  [Stream] Update failed: {e}")
 
             try:
                 result = await self._run_with_recovery(
@@ -222,6 +238,15 @@ class SessionManager:
                     if result.cost_usd is not None:
                         session.total_cost_usd += result.cost_usd
                         print(f"  [Session {key}] Turn: ${result.cost_usd:.4f} | Total: ${session.total_cost_usd:.4f} / ${MAX_SESSION_COST_USD:.2f}")
+
+                        # Hard stop: if we've blown past the budget after this turn, lock the session
+                        if session.total_cost_usd >= MAX_SESSION_COST_USD:
+                            budget_msg = f"\n\n:warning: _Session budget exhausted (${session.total_cost_usd:.2f} / ${MAX_SESSION_COST_USD:.2f}). Start a new thread to continue._"
+                            text += budget_msg
+                        # Soft warning at threshold
+                        elif session.total_cost_usd >= MAX_SESSION_COST_USD * BUDGET_WARN_THRESHOLD:
+                            remaining = MAX_SESSION_COST_USD - session.total_cost_usd
+                            text += f"\n\n:warning: _Budget warning: ${remaining:.2f} remaining in this session._"
                 else:
                     no_resp = "(No response generated)"
                     if thinking_ts and slack_client:
