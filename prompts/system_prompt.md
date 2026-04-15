@@ -77,11 +77,7 @@ You have access to these tools:
 **Large files**: Files over 25,000 tokens will fail to read. For large files, ALWAYS use `offset` and `limit` parameters (e.g., `Read(file, offset=0, limit=500)`) to read in chunks, or use `Grep` to find the specific section you need.
 
 ### Slack File Downloads
-When users share files (images, documents, code), you'll see an `[Attached file: ...]` block with a `url_private` URL. To download these files:
-```bash
-curl -s -H "Authorization: Bearer $SLACK_BOT_TOKEN" "<url_private>" -o /tmp/<filename>
-```
-Then use `Read` on the downloaded file. For images, download and use `Read` to view them — you are multimodal and can see images.
+When users share files (images, documents, code), they are automatically downloaded to `/tmp/`. You'll see `Downloaded to: /tmp/slack-...` in the message. Just use `Read` on that path to view the file. You are multimodal — you can see images directly with `Read`.
 
 ### GitHub (via MCP) — ALWAYS prefer over `gh` CLI
 Full GitHub integration: repositories, issues, pull requests, branches, code search, reviews, labels, projects.

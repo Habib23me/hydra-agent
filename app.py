@@ -96,21 +96,54 @@ def looks_like_injection(text: str) -> bool:
     return any(p.search(text) for p in _INJECTION_PATTERNS)
 
 
-def extract_file_info(event: dict) -> str:
-    """Extract file descriptions from a Slack event with attachments."""
+async def extract_file_info(event: dict) -> str:
+    """Extract files from a Slack event, download them to /tmp, return local paths.
+
+    Downloads using the bot token so the agent never needs to touch secrets.
+    The agent can then just Read() the local file path.
+    """
     files = event.get("files", [])
     if not files:
         return ""
+
+    import aiohttp
+
     descriptions = []
     for f in files:
         name = f.get("name", "unknown")
         filetype = f.get("filetype", "")
         url = f.get("url_private", "")
         size = f.get("size", 0)
-        desc = f"[Attached file: {name} ({filetype}, {size} bytes)]"
-        if url:
-            desc += f" Download: {url}"
-        descriptions.append(desc)
+
+        if not url:
+            descriptions.append(f"[Attached file: {name} ({filetype}, {size} bytes)]")
+            continue
+
+        # Download to /tmp so the agent can Read() it directly
+        local_path = f"/tmp/slack-{event.get('ts', 'unknown')}-{name}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url, headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"}
+                ) as resp:
+                    if resp.status == 200:
+                        with open(local_path, "wb") as out:
+                            out.write(await resp.read())
+                        descriptions.append(
+                            f"[Attached file: {name} ({filetype}, {size} bytes)] "
+                            f"Downloaded to: {local_path}"
+                        )
+                    else:
+                        descriptions.append(
+                            f"[Attached file: {name} ({filetype}, {size} bytes)] "
+                            f"Download failed (HTTP {resp.status})"
+                        )
+        except Exception as e:
+            descriptions.append(
+                f"[Attached file: {name} ({filetype}, {size} bytes)] "
+                f"Download failed: {e}"
+            )
+
     return "\n".join(descriptions)
 
 
@@ -130,7 +163,7 @@ async def handle_app_mention(event: dict, say, client) -> None:
         return
 
     text = strip_mention(event.get("text", ""))
-    file_info = extract_file_info(event)
+    file_info = await extract_file_info(event)
     if file_info:
         text = f"{text}\n\n{file_info}" if text else file_info
     if not text:
@@ -183,7 +216,7 @@ async def handle_message(event: dict, say, client) -> None:
         return
 
     text = strip_mention(text_raw) if re.search(r"<@[A-Z0-9]+>", text_raw) else text_raw.strip()
-    file_info = extract_file_info(event)
+    file_info = await extract_file_info(event)
     if file_info:
         text = f"{text}\n\n{file_info}" if text else file_info
 
