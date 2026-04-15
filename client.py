@@ -118,17 +118,36 @@ def load_all_project_memories() -> str:
     return "\n\n## Project Memory\n\nYou have accumulated knowledge about projects you've worked on. Use this to avoid re-exploring things you already know.\n\n" + "\n\n---\n\n".join(memories)
 
 
+def load_personality() -> str:
+    """Load the active personality prompt, if configured.
+
+    Set PERSONALITY env var to a personality name (e.g. "gilfoyle") or leave
+    empty/unset for default (no personality overlay).
+    """
+    name = os.environ.get("PERSONALITY", "").strip().lower()
+    if not name:
+        return ""
+
+    personality_file = PROMPTS_DIR / "personalities" / f"{name}.md"
+    if not personality_file.exists():
+        print(f"Warning: Personality '{name}' not found at {personality_file}")
+        return ""
+
+    return "\n\n" + personality_file.read_text()
+
+
 def load_system_prompt() -> str:
-    """Load the conversational agent system prompt with project registry and memory."""
+    """Load the conversational agent system prompt with project registry, memory, and personality."""
     base = (PROMPTS_DIR / "system_prompt.md").read_text()
 
     # Inject runtime paths into placeholders
     base = base.replace("{{MEMORY_DIR}}", str(MEMORY_DIR.resolve()))
     base = base.replace("{{AGENT_DIR}}", str(AGENT_DIR))
 
+    personality = load_personality()
     projects = load_projects_registry()
     memory = load_all_project_memories()
-    return base + projects + memory
+    return base + personality + projects + memory
 
 
 def _load_project_paths() -> list[str]:
