@@ -103,7 +103,8 @@ class SessionManager:
         key = self._key(channel, thread_ts)
 
         # Get or create session
-        if key not in self._sessions:
+        is_new_session = key not in self._sessions
+        if is_new_session:
             # Resolve CWD from channel → project mapping, fall back to default
             session_cwd = resolve_cwd_for_channel(channel, self._default_cwd)
             self._sessions[key] = ThreadSession(
@@ -113,6 +114,18 @@ class SessionManager:
             )
 
         session = self._sessions[key]
+
+        # Auto-create worktree for new sessions in project repos
+        # This ensures the agent never commits directly to main
+        if is_new_session and session.cwd != self._default_cwd and not session.worktree_path:
+            try:
+                wt_result = await self.create_session_worktree(
+                    channel, thread_ts, task_description=user_text[:60],
+                )
+                if wt_result:
+                    print(f"  [Session {key}] Auto-created worktree at {wt_result}")
+            except Exception as e:
+                print(f"  [Session {key}] Worktree auto-create failed: {e}")
 
         # Budget guard: stop if session has spent too much
         if session.total_cost_usd >= MAX_SESSION_COST_USD:

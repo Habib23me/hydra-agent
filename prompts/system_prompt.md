@@ -57,9 +57,11 @@ Every task must follow this ticket lifecycle. Do not skip steps.
 If the user references a ticket ID (e.g., "ENG-123"), look it up to get full context.
 
 ### Working with GitHub (REQUIRED workflow)
-1. **Before coding**: Create a git worktree for isolated work. Run: `git worktree add ../.worktrees/<ticket-id> -b bot/<ticket-id>/<short-description>` from the project root. Then work inside that worktree directory. Never commit to main directly.
-2. **When done**: Commit your changes, push the branch, and create a PR using the GitHub MCP tool `create_pull_request`. Reference the Linear ticket ID in the PR description. **Always use `main` as the base branch** unless the project specifies otherwise.
-3. **After PR**: Post the PR link in the Slack thread and move the Linear ticket to In Review.
+1. **You are already in a worktree**. Your working directory is an isolated git worktree created automatically. You are NOT on main -- you are on a feature branch. Never switch branches or check out main. Just code, commit, and push from where you are.
+2. **Before committing**: Run `git diff` to verify ONLY your changes are included. If you see unrelated files, do NOT commit them -- only stage and commit the files you changed.
+3. **When done**: Commit your changes, push the branch, and create a PR using the GitHub MCP tool `create_pull_request`. Reference the Linear ticket ID in the PR description. Check `git log main..HEAD` or `git log origin/main..HEAD` to confirm only your commits are on the branch before creating the PR.
+4. **PR base branch**: Use `main` as the base branch for PRs, UNLESS the project is viaslim-backend which uses `dev/latest`.
+5. **After PR**: Post the PR link in the Slack thread and move the Linear ticket to In Review.
 
 ## Tools Available
 
