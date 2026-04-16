@@ -30,6 +30,9 @@ from worktree import cleanup_worktree, create_worktree
 # Default model for new sessions
 DEFAULT_MODEL = "claude-sonnet-4-6"
 
+# Lightweight model for simple Q&A (ticket lookups, status, short answers)
+LIGHT_MODEL = "claude-haiku-4-5"
+
 # How long before an idle session is cleaned up (30 minutes)
 IDLE_TIMEOUT_SECONDS = 1800
 
@@ -44,6 +47,49 @@ BUDGET_WARN_THRESHOLD = 0.8
 
 # Max consecutive errors before circuit-breaking
 MAX_CONSECUTIVE_ERRORS = 5
+
+# Max user turns per session before forcing a new thread
+MAX_SESSION_TURNS = int(os.environ.get("MAX_SESSION_TURNS", "30"))
+
+# Turn count threshold: after this many turns, start compacting context
+COMPACT_AFTER_TURNS = 15
+
+
+def _is_lightweight_message(text: str) -> bool:
+    """Determine if a message can be handled by the cheaper Haiku model.
+
+    Simple heuristic: short messages without coding intent use Haiku.
+    Anything that looks like a coding task gets Sonnet.
+    """
+    text_lower = text.lower().strip()
+
+    # Short messages (under 100 chars) that are just questions/status
+    if len(text_lower) > 300:
+        return False
+
+    # Coding keywords → needs Sonnet
+    coding_signals = [
+        "implement", "build", "create pr", "fix", "refactor", "debug",
+        "write code", "add feature", "update the", "change the",
+        "commit", "push", "deploy", "migrate", "write test",
+        "investigate", "resolve", "PR", "pull request",
+        "edit", "modify", "rewrite",
+    ]
+    if any(signal in text_lower for signal in coding_signals):
+        return False
+
+    # Q&A / status patterns → Haiku is fine
+    light_signals = [
+        "what", "how many", "status", "list", "show me", "tell me",
+        "who", "when", "where", "which", "?",
+        "yes", "no", "ok", "thanks", "cool", "nice",
+        "lol", "haha",
+    ]
+    if any(signal in text_lower for signal in light_signals):
+        return True
+
+    # Default: if it's short enough, use Haiku
+    return len(text_lower) < 80
 
 
 @dataclass
@@ -68,6 +114,10 @@ class ThreadSession:
     _consecutive_errors: int = 0
     # Cost tracking
     total_cost_usd: float = 0.0
+    # Turn counter (user messages only)
+    turn_count: int = 0
+    # Whether we've compacted context in this session
+    _compacted: bool = False
 
 
 class SessionManager:
@@ -143,10 +193,26 @@ class SessionManager:
             )
             return
 
+        # Turn limit: force new thread after too many turns
+        if session.turn_count >= MAX_SESSION_TURNS:
+            await say(
+                text=f":warning: Session turn limit reached ({session.turn_count}/{MAX_SESSION_TURNS}). Start a new thread to keep context fresh and costs down.",
+                thread_ts=thread_ts,
+            )
+            return
+
         # Serialize access to this session (one message at a time)
         async with session._lock:
             session.last_activity = time.time()
+            session.turn_count += 1
             session.messages.append({"role": "user", "text": user_text})
+
+            # Context compaction: after many turns, disconnect and reconnect
+            # with a summarized history to reduce context size and cost
+            if session.turn_count == COMPACT_AFTER_TURNS and not session._compacted:
+                print(f"  [Session {key}] Compacting context at turn {session.turn_count}")
+                await self._disconnect_session(session)
+                session._compacted = True
 
             # Post a "thinking..." message that we'll update with streamed content
             thinking_ts = None
@@ -295,21 +361,35 @@ class SessionManager:
         """
         Run a turn with automatic reconnect on failure.
 
+        Uses model routing: simple Q&A goes to Haiku, coding tasks to Sonnet.
         If the SDK client crashes, disconnect it, create a fresh one,
         replay conversation history, and retry the current message.
         """
+        # Model routing: pick the right model for this message
+        use_model = session.model
+        if _is_lightweight_message(user_text):
+            use_model = LIGHT_MODEL
+            print(f"  [Router] Using {LIGHT_MODEL} for lightweight message")
+
         for attempt in range(1 + MAX_RECONNECT_RETRIES):
             try:
                 if session.client is None:
+                    # Use the routed model for new clients, but keep session
+                    # default for reconnects after compaction
+                    model_for_client = use_model if session.turn_count <= 1 else session.model
                     session.client = create_session_client(
                         cwd=session.cwd,
-                        model=session.model,
+                        model=model_for_client,
                     )
                     await session.client.connect()
 
                     # Replay history if we have prior messages
                     if len(session.messages) > 1:
-                        history = self._format_history(session.messages[:-1])
+                        # After compaction, send a condensed summary instead of full history
+                        if session._compacted:
+                            history = self._format_compact_history(session.messages[:-1])
+                        else:
+                            history = self._format_history(session.messages[:-1])
                         context_msg = (
                             f"Here is the conversation so far in this Slack thread:\n"
                             f"{history}\n---\n"
@@ -445,6 +525,43 @@ class SessionManager:
         for msg in messages:
             role = "User" if msg["role"] == "user" else "You"
             lines.append(f"[{role}]: {msg['text']}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_compact_history(messages: list[dict]) -> str:
+        """Format a condensed version of history for post-compaction replay.
+
+        Keeps the first message (original task), last 4 exchanges, and
+        truncates everything in between to save context tokens.
+        """
+        if len(messages) <= 8:
+            # Short enough, no need to compact
+            lines = []
+            for msg in messages:
+                role = "User" if msg["role"] == "user" else "You"
+                lines.append(f"[{role}]: {msg['text']}")
+            return "\n".join(lines)
+
+        lines = ["[COMPACTED CONTEXT — showing first message and recent exchanges]\n"]
+
+        # First message (original task)
+        first = messages[0]
+        role = "User" if first["role"] == "user" else "You"
+        lines.append(f"[{role} (original request)]: {first['text']}")
+
+        # Middle summary
+        skipped = len(messages) - 5
+        lines.append(f"\n[... {skipped} earlier messages omitted for context efficiency ...]\n")
+
+        # Last 4 messages (most recent context)
+        for msg in messages[-4:]:
+            role = "User" if msg["role"] == "user" else "You"
+            # Truncate long assistant messages in history
+            text = msg["text"]
+            if role == "You" and len(text) > 500:
+                text = text[:500] + "... [truncated]"
+            lines.append(f"[{role}]: {text}")
+
         return "\n".join(lines)
 
     @staticmethod

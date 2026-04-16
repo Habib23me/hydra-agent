@@ -350,6 +350,10 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
     for org_name in _load_sentry_orgs():
         allowed_tools.append(f"mcp__sentry_{org_name}__*")
 
+    # Per-turn budget: limit what a single user message can spend.
+    # This prevents runaway turns from blowing through the session budget.
+    per_turn_budget = float(os.environ.get("MAX_TURN_COST_USD", "3.0"))
+
     return ClaudeSDKClient(
         options=ClaudeAgentOptions(
             model=model,
@@ -376,7 +380,9 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
                     ),
                 ],
             },
-            max_turns=200,
+            max_turns=40,
+            max_budget_usd=per_turn_budget,
+            max_buffer_size=512_000,  # 512KB — prevents 1MB JSON buffer overflow
             cwd=str(cwd.resolve()),
             settings=str(settings_file.resolve()),
         )
