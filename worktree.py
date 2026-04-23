@@ -67,9 +67,31 @@ async def _run(cmd: str, cwd: Path) -> tuple[int, str, str]:
     return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
 
 
-async def _fetch_base_branch(repo_path: Path, base_branch: str) -> None:
-    """Fetch the latest base branch from origin so worktrees start fresh."""
-    await _run(f"git fetch origin {base_branch}", repo_path)
+async def _sync_base_branch(repo_path: Path, base_branch: str) -> None:
+    """Fetch the base branch from origin and fast-forward the local ref.
+
+    `git fetch origin {base_branch}` only updates refs/remotes/origin/{base_branch}
+    — the local ref stays where it was. Worktrees previously branched from the
+    stale local ref, so a primary checkout left sitting on an old main produced
+    stale worktrees. Here we also run `git fetch origin {base_branch}:{base_branch}`
+    which fast-forwards the local ref to the remote tip. It fails (harmlessly)
+    if the local branch is currently checked out in a worktree or has diverged;
+    in those cases create_worktree still uses origin/{base_branch} as the
+    start point, so the worktree is always fresh regardless.
+    """
+    rc, _, err = await _run(f"git fetch origin {base_branch}", repo_path)
+    if rc != 0:
+        # Not fatal — we'll still try to use whatever origin/{base_branch}
+        # points at locally, but warn loudly so a stale ref is visible.
+        print(f"  [Worktree] WARNING: git fetch origin {base_branch} failed: {err}")
+    # Best-effort local fast-forward so the primary checkout doesn't rot either.
+    rc, _, err = await _run(
+        f"git fetch origin {base_branch}:{base_branch}", repo_path
+    )
+    if rc != 0 and err:
+        # Common causes: branch is currently checked out, or local has diverged.
+        # Not fatal — the worktree will still branch from origin/{base_branch}.
+        print(f"  [Worktree] Note: could not fast-forward local {base_branch}: {err}")
 
 
 async def create_worktree(
@@ -97,8 +119,8 @@ async def create_worktree(
     if base_branch is None:
         base_branch = _get_base_branch_for_repo(repo_path)
 
-    # Fetch latest base branch to avoid stale starts
-    await _fetch_base_branch(repo_path, base_branch)
+    # Fetch latest base branch and sync the local ref to avoid stale starts.
+    await _sync_base_branch(repo_path, base_branch)
 
     sid = _short_id()
     slug = _slug(task_description) if task_description else "work"
@@ -109,17 +131,26 @@ async def create_worktree(
     worktree_root.mkdir(parents=True, exist_ok=True)
     worktree_path = worktree_root / f"{sid}-{slug}"
 
-    # Verify the base branch exists
-    rc, _, err = await _run(f"git rev-parse --verify {base_branch}", repo_path)
-    if rc != 0:
-        # Try origin/base_branch
-        rc, _, err = await _run(f"git rev-parse --verify origin/{base_branch}", repo_path)
-        if rc != 0:
-            raise RuntimeError(f"Base branch '{base_branch}' not found locally or on origin: {err}")
-        # Use the remote ref
+    # Always prefer origin/{base_branch} so the worktree starts from the
+    # freshly-fetched remote tip. The local ref may be stale or diverged
+    # if the primary checkout was left on base_branch without pulling.
+    rc, _, err = await _run(f"git rev-parse --verify origin/{base_branch}", repo_path)
+    if rc == 0:
         start_point = f"origin/{base_branch}"
     else:
+        # Offline / no remote — fall back to the local ref.
+        rc, _, err = await _run(f"git rev-parse --verify {base_branch}", repo_path)
+        if rc != 0:
+            raise RuntimeError(f"Base branch '{base_branch}' not found locally or on origin: {err}")
         start_point = base_branch
+
+    # Capture the SHA we INTEND to branch from. After worktree creation we'll
+    # verify the worktree's HEAD matches this — a tripwire that turns any
+    # future regression (stale ref resolution, wrong start_point, etc.) into
+    # a loud failure at creation time instead of a silently-broken PR later.
+    rc, expected_sha, err = await _run(f"git rev-parse {start_point}", repo_path)
+    if rc != 0:
+        raise RuntimeError(f"Could not resolve {start_point} to a SHA: {err}")
 
     # Create the worktree with a new branch from the base branch
     cmd = f"git worktree add -b {branch_name} {worktree_path} {start_point}"
@@ -136,7 +167,44 @@ async def create_worktree(
         else:
             raise RuntimeError(f"Failed to create worktree: {err}")
 
-    print(f"  [Worktree] Created {worktree_path} on branch {branch_name} (from {start_point})")
+    # Tripwire: verify the worktree actually starts where we expected. If
+    # anything in the logic above ever drifts back to using a stale ref,
+    # this fires immediately with a clear error instead of producing a
+    # polluted PR hours later.
+    rc, actual_sha, err = await _run("git rev-parse HEAD", worktree_path)
+    if rc != 0 or actual_sha != expected_sha:
+        # Tear down the broken worktree so we don't leave it lying around.
+        await _run(f"git worktree remove --force {worktree_path}", repo_path)
+        raise RuntimeError(
+            f"Worktree HEAD mismatch: expected {expected_sha} (from {start_point}) "
+            f"but got {actual_sha!r}. Worktree torn down. "
+            f"This indicates a stale base branch or a bug in create_worktree."
+        )
+
+    # Symlink each entry under .claude/ from the source repo so skills,
+    # settings, and custom agents are discoverable from the worktree. We link
+    # individual entries (not the whole .claude/ dir) because some projects
+    # partially track .claude/ in git — e.g. .claude/worktrees/ committed but
+    # .claude/skills/ gitignored. A whole-dir symlink would be skipped when
+    # the worktree already has a real .claude/ from tracked content.
+    claude_src = repo_path / ".claude"
+    if claude_src.is_dir():
+        claude_dst = worktree_path / ".claude"
+        claude_dst.mkdir(exist_ok=True)
+        linked = []
+        for entry in claude_src.iterdir():
+            target = claude_dst / entry.name
+            if target.exists() or target.is_symlink():
+                continue
+            target.symlink_to(entry.resolve())
+            linked.append(entry.name)
+        if linked:
+            print(f"  [Worktree] Linked .claude/{{{','.join(linked)}}} -> {claude_src.resolve()}")
+
+    print(
+        f"  [Worktree] Created {worktree_path} on branch {branch_name} "
+        f"(from {start_point} @ {expected_sha[:8]})"
+    )
     return worktree_path, branch_name
 
 
