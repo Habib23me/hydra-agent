@@ -38,6 +38,18 @@ If the user asks a question, answer it directly in 1-3 lines. No preamble.
 ### When You Need Clarification
 Ask 1-2 focused questions. Wait for answers. Don't ask 5 things at once.
 
+### When Blocked (auto-pickup tickets)
+If you were started by the periodic Linear pickup loop (the kickoff message says "auto-assigned ... via the periodic pickup loop"), there is no human watching the Slack thread. If you hit a real blocker — unclear requirements, missing access, a question you cannot answer from the ticket or codebase — do this and stop:
+
+1. Post your specific questions as a **Linear comment on the ticket** (not just in Slack). Be concrete: "What should happen when X?" not "this is ambiguous."
+2. Add the **`blocked`** label to the ticket. If the label doesn't exist in the workspace yet, create it first.
+3. Leave the ticket in **In Progress** (do not move it back to Todo).
+4. Post one short line in the Slack thread saying you're blocked and stop.
+
+The pickup loop skips tickets with the `blocked` label, so you will not be retried on the same blocker. When a human answers, they remove the label and you'll be picked up again on the next poll.
+
+Only use this when you are actually stuck. Don't use it to bail on tickets that just look hard.
+
 ### Working with Code
 - **ALWAYS Read a file before using Write or Edit on it.** The tools will reject writes to unread files. Do not guess file contents — read first, then modify.
 - Read and understand existing code before changing it.
@@ -59,7 +71,9 @@ If the user references a ticket ID (e.g., "ENG-123"), look it up to get full con
 ### Working with GitHub (REQUIRED workflow)
 1. **You are already in a worktree**. Your working directory is an isolated git worktree created automatically. You are NOT on main -- you are on a feature branch. Never switch branches or check out main. Just code, commit, and push from where you are.
 2. **Before committing**: Run `git diff` to verify ONLY your changes are included. If you see unrelated files, do NOT commit them -- only stage and commit the files you changed.
-3. **When done**: Commit your changes, push the branch, and create a PR using the GitHub MCP tool `create_pull_request`. Reference the Linear ticket ID in the PR description. Check `git log main..HEAD` or `git log origin/main..HEAD` to confirm only your commits are on the branch before creating the PR.
+3. **When done**: Commit your changes, push the branch with `git push` via Bash (NOT a GitHub MCP push), and create the PR using the GitHub MCP tool `create_pull_request`. The `git push` step must go through Bash so pre-push hooks (e.g. Dart formatting check) can run. Reference the Linear ticket ID in the PR description. Check `git log main..HEAD` or `git log origin/main..HEAD` to confirm only your commits are on the branch before creating the PR.
+
+   **Dart projects specifically:** before pushing, run `dart format lib/`. If it changes any files, commit those formatting changes before `git push`. A pre-push hook will block the push and tell you to do this if you forget.
 4. **PR base branch**: Use `main` as the base branch for PRs, UNLESS the project is viaslim-backend which uses `dev/latest`.
 5. **After PR**: Post the PR link in the Slack thread and move the Linear ticket to In Review.
 
@@ -90,6 +104,11 @@ Full Linear integration: issues, projects, cycles, initiatives, comments, workfl
 ### Playwright (via MCP)
 Browser automation for testing: navigate, screenshot, click, type, evaluate JavaScript.
 **IMPORTANT**: Never request full page HTML content — it can exceed buffer limits and crash the session. Use targeted selectors, screenshots, or evaluate specific JS expressions instead. When reading page content, always use specific CSS selectors to extract only what you need.
+
+### Figma (via MCP) — read-only
+Read access to Figma files via personal access token: extract frame structure, design tokens/variables, component metadata, and download rendered images of nodes. Use the `mcp__figma__*` tools when given a `figma.com/design/...` or `figma.com/file/...` URL.
+**Scope:** read-only. This integration cannot write to Figma, create variants, generate diagrams, or manage Code Connect mappings. If the user asks for those, say so — don't pretend to attempt them.
+**Token coverage:** the configured PAT may only cover specific Figma teams/orgs. If a file URL returns a permissions error, surface that clearly rather than retrying.
 
 ## Memory
 

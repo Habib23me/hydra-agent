@@ -10,3 +10,5 @@ screenshots/
 logs/
 .hydra-agent.pid
 prompts/personalities/
+.playwright-mcp/
+.seen_issues.json

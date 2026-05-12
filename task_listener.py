@@ -2,16 +2,22 @@
 Task Listener — Linear Issue Auto-Pickup
 =========================================
 
-Polls Linear workspaces for issues assigned to the bot's user account.
-When a new assignment is detected, posts a Slack thread and starts a session.
+Polls Linear workspaces on a long interval and picks up assigned issues in
+batches. The poll is a pure rate limit: every POLL_INTERVAL seconds, each
+workspace fires up to BATCH_SIZE tickets concurrently and immediately sleeps
+again — it does NOT wait for those sessions to finish before the next tick.
 
-The bot picks up issues in "backlog" or "unstarted" (Todo) states.
+Eligibility (must all be true):
+- Assignee is the bot's Linear user
+- state.type ∈ {backlog, unstarted, started}  (excludes triage, completed,
+  canceled, and any "Review" state which would have a PR already)
+- No GitHub PR linked via attachments (URL contains "/pull/")
+- No label named BLOCKED_LABEL (agent self-marks tickets it can't progress on)
 """
 
 import asyncio
 import json
 import os
-import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,25 +25,30 @@ import httpx
 from slack_sdk.web.async_client import AsyncWebClient
 
 
-# How often to poll Linear for new assignments (seconds)
-POLL_INTERVAL = int(os.environ.get("TASK_POLL_INTERVAL", "30"))
+# How often to poll Linear for new assignments (seconds). Default: 30 min.
+POLL_INTERVAL = int(os.environ.get("TASK_POLL_INTERVAL", "1800"))
 
-# File to persist seen issue IDs across restarts
-_SEEN_FILE = Path(__file__).parent / ".seen_issues.json"
+# Max tickets to pick up per project per poll tick.
+BATCH_SIZE = int(os.environ.get("TASK_BATCH_SIZE", "5"))
 
-# Linear states that trigger auto-pickup
-_PICKUP_STATES = {"backlog", "unstarted"}
+# Linear states whose `type` makes a ticket eligible for pickup.
+_PICKUP_STATE_TYPES = ["backlog", "unstarted", "started"]
 
-# GraphQL query: issues assigned to a user in backlog/unstarted states
+# Label that tells the listener to skip a ticket on subsequent polls. The
+# agent adds this label itself when it gets stuck on unclear requirements.
+BLOCKED_LABEL = "blocked"
+
+# GraphQL query: assigned issues in pickup states, with attachments + labels
+# so we can filter out PR-linked and blocked tickets client-side.
 _ISSUES_QUERY = """
-query($userId: ID!) {
+query($userId: ID!, $stateTypes: [String!]!) {
   issues(
     filter: {
       assignee: { id: { eq: $userId } }
-      state: { type: { in: ["backlog", "unstarted"] } }
+      state: { type: { in: $stateTypes } }
     }
     orderBy: createdAt
-    first: 20
+    first: 50
   ) {
     nodes {
       id
@@ -45,9 +56,11 @@ query($userId: ID!) {
       title
       description
       url
+      createdAt
       state { name type }
       team { key name }
       labels { nodes { name } }
+      attachments { nodes { url sourceType } }
       priority
       project { name }
     }
@@ -64,28 +77,30 @@ class LinearIssue:
     title: str
     description: str | None
     url: str
+    created_at: str
     team_key: str  # e.g. "GYM"
     labels: list[str]
+    attachment_urls: list[str]
     priority: int | None
     project_name: str | None
 
+    def has_linked_pr(self) -> bool:
+        """True if any attachment looks like a GitHub PR."""
+        return any("/pull/" in (u or "") for u in self.attachment_urls)
 
-def _load_seen() -> set[str]:
-    """Load previously seen issue IDs from disk."""
-    if _SEEN_FILE.exists():
-        try:
-            return set(json.loads(_SEEN_FILE.read_text()))
-        except Exception:
-            return set()
-    return set()
+    def is_blocked(self) -> bool:
+        """True if the agent previously marked this ticket as blocked."""
+        return any(lbl.lower() == BLOCKED_LABEL for lbl in self.labels)
 
 
-def _save_seen(seen: set[str]) -> None:
-    """Persist seen issue IDs to disk."""
-    try:
-        _SEEN_FILE.write_text(json.dumps(sorted(seen)))
-    except Exception as e:
-        print(f"  [TaskListener] Failed to save seen issues: {e}")
+def _priority_sort_key(issue: LinearIssue) -> tuple[int, str]:
+    """Sort ascending: urgent first, then high → low, then no-priority last.
+
+    Linear priority: 0 = no priority, 1 = urgent, 2 = high, 3 = medium, 4 = low.
+    Treat 0 as worst (99) so genuinely prioritized work goes first.
+    """
+    p = issue.priority if issue.priority else 99
+    return (p, issue.created_at)
 
 
 def _load_projects_config() -> dict:
@@ -117,7 +132,13 @@ async def _fetch_assigned_issues(
                 "Content-Type": "application/json",
                 "Authorization": api_key,
             },
-            json={"query": _ISSUES_QUERY, "variables": {"userId": user_id}},
+            json={
+                "query": _ISSUES_QUERY,
+                "variables": {
+                    "userId": user_id,
+                    "stateTypes": _PICKUP_STATE_TYPES,
+                },
+            },
             timeout=15,
         )
         resp.raise_for_status()
@@ -131,8 +152,12 @@ async def _fetch_assigned_issues(
             title=node["title"],
             description=node.get("description"),
             url=node["url"],
+            created_at=node.get("createdAt", ""),
             team_key=node.get("team", {}).get("key", ""),
             labels=[l["name"] for l in node.get("labels", {}).get("nodes", [])],
+            attachment_urls=[
+                a.get("url", "") for a in node.get("attachments", {}).get("nodes", [])
+            ],
             priority=node.get("priority"),
             project_name=node.get("project", {}).get("name") if node.get("project") else None,
         ))
@@ -151,9 +176,14 @@ class TaskListener:
         self._slack = slack_client
         self._sessions = session_manager
         self._workspaces = workspaces
-        self._seen: set[str] = _load_seen()
         self._config = _load_projects_config()
         self._running = False
+        # Tickets we already kicked off in the current process. Linear state
+        # (PR-linked / blocked label) is the durable source of truth across
+        # restarts; this is just a within-process safety net so a slow agent
+        # turn doesn't get re-picked on the next tick before it has had a
+        # chance to mutate the ticket.
+        self._in_flight: set[str] = set()
 
     async def start(self) -> None:
         """Start the polling loop."""
@@ -163,7 +193,10 @@ class TaskListener:
 
         self._running = True
         workspace_names = ", ".join(self._workspaces.keys())
-        print(f"  [TaskListener] Polling every {POLL_INTERVAL}s for: {workspace_names}")
+        print(
+            f"  [TaskListener] Polling every {POLL_INTERVAL}s "
+            f"(batch={BATCH_SIZE} per project) for: {workspace_names}"
+        )
 
         while self._running:
             try:
@@ -176,7 +209,12 @@ class TaskListener:
         self._running = False
 
     async def _poll(self) -> None:
-        """Check each workspace for newly assigned issues."""
+        """Pick up to BATCH_SIZE eligible tickets per workspace, then return.
+
+        Sessions started here run fire-and-forget. The loop sleeps for
+        POLL_INTERVAL regardless of whether they finish — the batch cap is
+        the only rate limit.
+        """
         for workspace_name, ws_config in self._workspaces.items():
             api_key = ws_config["api_key"]
             user_id = ws_config["user_id"]
@@ -187,34 +225,48 @@ class TaskListener:
                 print(f"  [TaskListener] Error polling {workspace_name}: {e}")
                 continue
 
-            for issue in issues:
-                if issue.id in self._seen:
-                    continue
+            eligible = [i for i in issues if self._is_eligible(i)]
+            eligible.sort(key=_priority_sort_key)
+            batch = eligible[:BATCH_SIZE]
 
-                # Mark as seen immediately to avoid duplicate pickups
-                self._seen.add(issue.id)
-                _save_seen(self._seen)
+            skipped_pr = sum(1 for i in issues if i.has_linked_pr())
+            skipped_blocked = sum(1 for i in issues if i.is_blocked())
+            print(
+                f"  [TaskListener] {workspace_name}: {len(issues)} assigned, "
+                f"{len(eligible)} eligible, {skipped_pr} have PR, "
+                f"{skipped_blocked} blocked → picking {len(batch)}"
+            )
 
-                channel = _resolve_channel_for_workspace(
-                    workspace_name, self._config
-                )
-                if not channel:
+            channel = _resolve_channel_for_workspace(
+                workspace_name, self._config
+            )
+            if not channel:
+                if batch:
                     print(
                         f"  [TaskListener] No channel for workspace "
-                        f"{workspace_name}, skipping {issue.identifier}"
+                        f"{workspace_name}, skipping {len(batch)} tickets"
                     )
-                    continue
+                continue
 
+            for issue in batch:
+                self._in_flight.add(issue.id)
                 print(
-                    f"\n  [TaskListener] New issue: {issue.identifier} "
-                    f"— {issue.title} (workspace: {workspace_name})"
+                    f"  [TaskListener] Picking up {issue.identifier} "
+                    f"— {issue.title} (priority={issue.priority})"
                 )
-
-                # Fire-and-forget: don't block the poll loop waiting for
-                # the agent to finish its turn
                 asyncio.create_task(
                     self._start_issue(channel, issue, workspace_name)
                 )
+
+    def _is_eligible(self, issue: LinearIssue) -> bool:
+        """Apply client-side filters that GraphQL can't express cleanly."""
+        if issue.id in self._in_flight:
+            return False
+        if issue.is_blocked():
+            return False
+        if issue.has_linked_pr():
+            return False
+        return True
 
     async def _start_issue(
         self, channel: str, issue: LinearIssue, workspace: str
@@ -250,14 +302,21 @@ class TaskListener:
             desc_block = f"\n\nDescription:\n{desc}"
 
         prompt = (
-            f"A new Linear issue has been assigned to you.\n\n"
+            f"You have been auto-assigned a Linear issue via the periodic "
+            f"pickup loop. There is no human waiting on this thread — work "
+            f"autonomously until you finish or get stuck.\n\n"
             f"Ticket: {issue.identifier} — {issue.title}\n"
             f"URL: {issue.url}\n"
-            f"Team: {issue.team_key}\n"
-            f"Status: {issue.url}{desc_block}\n\n"
-            f"Start working on this issue. Follow the standard workflow: "
-            f"move to In Progress, create a worktree, implement the changes, "
-            f"create a PR, and move to In Review."
+            f"Team: {issue.team_key}{desc_block}\n\n"
+            f"Standard workflow: move to In Progress, implement in your "
+            f"worktree, open a PR, move to In Review.\n\n"
+            f"If you get stuck on unclear requirements or need a human "
+            f"answer to proceed, follow the 'When blocked' workflow: post "
+            f"your specific questions as a Linear comment on this ticket, "
+            f"add the '{BLOCKED_LABEL}' label, leave the ticket in In "
+            f"Progress, and stop. Do NOT keep retrying — the pickup loop "
+            f"will skip blocked tickets so it won't burn tokens re-trying "
+            f"the same blocker."
         )
 
         # Use a wrapper that acts like Slack's say() function
@@ -268,13 +327,16 @@ class TaskListener:
                 text=text,
             )
 
-        await self._sessions.process_message(
-            channel=channel,
-            thread_ts=thread_ts,
-            user_text=prompt,
-            say=say,
-            slack_client=self._slack,
-        )
+        try:
+            await self._sessions.process_message(
+                channel=channel,
+                thread_ts=thread_ts,
+                user_text=prompt,
+                say=say,
+                slack_client=self._slack,
+            )
+        finally:
+            self._in_flight.discard(issue.id)
 
 
 def build_task_listener_config() -> dict[str, dict]:

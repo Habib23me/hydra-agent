@@ -303,6 +303,7 @@ async def main() -> None:
         print(f"Sentry MCP: enabled ({', '.join(sentry_orgs.keys())})")
     else:
         print("Sentry MCP: disabled")
+    print(f"Figma MCP: {'enabled' if os.environ.get('FIGMA_API_KEY') else 'disabled'}")
     print()
     print("@mention the bot in any channel to start a conversation.")
     print("Reply in the thread to continue the conversation.")

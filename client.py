@@ -17,6 +17,7 @@ load_dotenv()
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, McpServerConfig
 from claude_agent_sdk.types import HookCallback, HookMatcher
 
+from hook_dart_format import make_dart_format_hook
 from security import bash_security_hook, file_read_guard_hook
 
 
@@ -60,6 +61,7 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 # Environment
 GITHUB_TOKEN: str = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 LINEAR_API_KEY: str = os.environ.get("LINEAR_API_KEY", "")
+FIGMA_API_KEY: str = os.environ.get("FIGMA_API_KEY", "")
 
 
 def load_projects_registry() -> str:
@@ -193,6 +195,7 @@ def create_security_settings() -> SecuritySettings:
         "Bash(*)",
         *PLAYWRIGHT_TOOLS,
         "mcp__github__*",
+        "mcp__figma__*",
     ]
 
     # Add file access for all registered projects
@@ -286,6 +289,16 @@ def get_mcp_servers() -> dict[str, McpServerConfig]:
         ),
     }
 
+    if FIGMA_API_KEY:
+        servers["figma"] = cast(
+            McpServerConfig,
+            {
+                "command": "npx",
+                "args": ["-y", "figma-developer-mcp", "--stdio"],
+                "env": {"FIGMA_API_KEY": FIGMA_API_KEY},
+            },
+        )
+
     if GITHUB_TOKEN:
         servers["github"] = cast(
             McpServerConfig,
@@ -341,6 +354,8 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
 
     # Build allowed tools list
     allowed_tools = [*BUILTIN_TOOLS, *PLAYWRIGHT_TOOLS]
+    if FIGMA_API_KEY:
+        allowed_tools.append("mcp__figma__*")
     if GITHUB_TOKEN:
         allowed_tools.append("mcp__github__*")
     # Allow tools from all configured Linear workspaces
@@ -364,7 +379,10 @@ def create_session_client(cwd: Path, model: str) -> ClaudeSDKClient:
                 "PreToolUse": [
                     HookMatcher(
                         matcher="Bash",
-                        hooks=[cast(HookCallback, bash_security_hook)],
+                        hooks=[
+                            cast(HookCallback, bash_security_hook),
+                            cast(HookCallback, make_dart_format_hook(cwd)),
+                        ],
                     ),
                     HookMatcher(
                         matcher="Read",
